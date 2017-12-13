@@ -7,17 +7,17 @@ BASEFLAGS=-Wall -Wextra -std=c11 -pedantic -D_POSIX_C_SOURCE=200809L
 
 8count := 1 2 3 4 5 6 7 8
 
-all release debug: common.h $(patsubst set%.c, bin/set%.elf, $(foreach dir, $(8count), $(wildcard set_$(dir)/*))) | dir
+src_list = $(foreach dir, $(8count), $(wildcard set_$(dir)/*.c))
+obj_list = $(foreach dir, $(8count), $(wildcard set_$(dir)/*.o))
+elf_list = $(foreach dir, $(8count), $(wildcard set_$(dir)/*.elf))
 
-bin/%.elf: common.h
-	$(CC) $(CFLAGS) common.c $(patsubst bin/%.elf, %.c, $@) $(CLIBS) -o $(subst .c, .elf, $@)
+all release debug: common.h common.o $(patsubst %.c, %.o, $(src_list)) $(patsubst %.c, %.elf, $(src_list))
 
-.PHONY: dir
-dir:
-	@mkdir -p bin
-	@for set in 1 2 3 4 ; do \
-		mkdir -p bin/set_$$set ; \
-	done
+%.o: %.c common.h
+	$(CC) -c $(CFLAGS) $(patsubst %.o, %.c, $@) $(CLIBS) -o $@
+
+%.elf: %.o
+	$(CC) $(CFLAGS) common.o $(patsubst %.elf, %.o, $@) $(CLIBS) -o $@
 
 ifeq (,$(filter debug, $(MAKECMDGOALS)))
 $(eval CFLAGS = $(BASEFLAGS) $(RELEASEFLAGS))
@@ -26,7 +26,7 @@ $(eval CFLAGS = $(BASEFLAGS) $(DEBUGFLAGS))
 endif
 
 .PHONY: clean
-clean: | $(ODIR)
-	$(RM) $(foreach dir, $(8count), $(wildcard bin/set_$(dir)/*))
+clean:
+	$(RM) common.o $(obj_list) $(elf_list)
 	@$(RM) $(wildcard *.gch)
 
