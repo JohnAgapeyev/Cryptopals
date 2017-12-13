@@ -8,6 +8,7 @@ static void *checked_calloc(const size_t nmemb, const size_t size);
 static void *checked_realloc(void *ptr, const size_t len);
 
 static const char *hex_values = "0123456789abcdef";
+static const char *common_letters = "etoinshrdlu ";
 
 void *checked_malloc(const size_t len) {
     void *out = malloc(len);
@@ -79,3 +80,14 @@ unsigned char *xor_buffer(const unsigned char *left, const unsigned char *right,
     return out;
 }
 
+unsigned long plaintext_frequency(const unsigned char *input, const size_t len) {
+    unsigned long score = 0;
+    for (size_t i = 0; i < strlen(common_letters); ++i) {
+        for (size_t j = 0; j < len; ++j) {
+            if (input[j] == common_letters[i]) {
+                ++score;
+            }
+        }
+    }
+    return score;
+}
