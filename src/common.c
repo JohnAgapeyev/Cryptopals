@@ -34,9 +34,9 @@ void *checked_realloc(void *ptr, const size_t len) {
 }
 
 unsigned char *hex_encode(const unsigned char *buffer, const size_t len) {
-    unsigned char *out = checked_malloc(len * 2);
+    unsigned char *out = checked_malloc((len * 2) + 1);
     for (size_t i = 0; i < len; ++i) {
-        snprintf(out + (i * 2), 2, "%02x", buffer[i]);
+        snprintf((char *) out + (i * 2), 3, "%02x", buffer[i]);
     }
     return out;
 }
@@ -49,8 +49,8 @@ unsigned char *hex_decode(const unsigned char *buffer, const size_t len) {
     unsigned char *out = checked_malloc(len / 2);
 
     for (size_t i = 0; i < len / 2; ++i) {
-        out[i] = ((unsigned char) (memchr(hex_values, buffer[i * 2], strlen(hex_values)) - (void *) hex_values)) * 16;
-        out[i] += (unsigned char) (memchr(hex_values, buffer[i * 2 + 1], strlen(hex_values)) - (void *) hex_values);
+        out[i] = ((unsigned char) ((const char *) memchr(hex_values, buffer[i * 2], strlen(hex_values)) - hex_values)) * 16;
+        out[i] += (unsigned char) ((const char *) memchr(hex_values, buffer[i * 2 + 1], strlen(hex_values)) - hex_values);
     }
     return out;
 }
