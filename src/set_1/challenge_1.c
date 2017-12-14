@@ -17,4 +17,5 @@ int main(void) {
 
     free(decoded);
     free(buffer);
+    return EXIT_SUCCESS;
 }

@@ -47,4 +47,5 @@ int main(void) {
 
     free(raw_best_input);
     free(result);
+    return EXIT_SUCCESS;
 }

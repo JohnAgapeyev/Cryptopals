@@ -28,4 +28,5 @@ int main(void) {
 
     free(result);
     free(raw_input);
+    return EXIT_SUCCESS;
 }

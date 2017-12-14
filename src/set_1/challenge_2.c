@@ -22,4 +22,5 @@ int main(void) {
     free(raw_xor);
     free(hex_result);
     free(buffer);
+    return EXIT_SUCCESS;
 }

@@ -28,4 +28,5 @@ int main(void) {
 
     free(xor);
     free(hex);
+    return EXIT_SUCCESS;
 }

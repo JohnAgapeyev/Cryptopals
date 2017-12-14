@@ -91,3 +91,17 @@ unsigned long plaintext_frequency(const unsigned char *input, const size_t len) 
     }
     return score;
 }
+
+unsigned long hamming_distance(const unsigned char *first, const unsigned char *second, const size_t len) {
+    unsigned long count = 0;
+    for (size_t i = 0; i < len; ++i) {
+        unsigned char diff = first[i] ^ second[i];
+        while (diff > 0) {
+            if ((diff & 1) == 1) {
+                ++count;
+            }
+            diff >>= 1;
+        }
+    }
+    return count;
+}
