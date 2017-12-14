@@ -11,16 +11,16 @@ void fill_repeating(unsigned char *buffer, const size_t len, const char *key, co
 }
 
 unsigned long get_key_size(const unsigned char *data, const size_t len) {
-    if (len < 80) {
-        fprintf(stderr, "Data must be at least twice as long as largest tried key size\n");
-        abort();
-    }
     unsigned long min_dist = ULONG_MAX;
     unsigned long key_size = 0;
+
     for (size_t i = 2; i <= 40; ++i) {
-        unsigned long dist_1 = hamming_distance(data, data + i, i);
-        unsigned long dist_2 = hamming_distance(data + (i * 2), data + (i * 3), i);
-        unsigned long dist = (dist_1 + dist_2) / 2;
+        unsigned long dist = 0;
+        for (size_t j = 0; j < len / i; ++j) {
+            dist += hamming_distance(data, data + (i * j), i);
+        }
+        dist /= len / i;
+        dist /= i;
         if (dist < min_dist) {
             min_dist = dist;
             key_size = i;
@@ -47,11 +47,10 @@ int main(void) {
             input[index++] = c;
         }
     }
-    unsigned char *raw_file = base_64_decode(input, file_size);
-    size_t raw_len = (file_size / 4) * 3;
+    unsigned char *raw_file = base_64_decode(input, index);
+    size_t raw_len = ((index / 4) * 3) - 2;
 
     unsigned long key_size = get_key_size(raw_file, raw_len);
-    printf("%lu\n", key_size);
 
     unsigned char data_bytes[key_size][raw_len / key_size];
     for (size_t i = 0; i < key_size; ++i) {
@@ -61,42 +60,45 @@ int main(void) {
     }
 
     unsigned char key[key_size];
-    unsigned long max_score = 0;
+    unsigned long max_score;
 
     unsigned char test_buffer[raw_len / key_size];
 
     for (size_t h = 0; h < key_size; ++h) {
         max_score = 0;
-        for (size_t i = 0; i < 128; ++i) {
+        for (size_t i = 1; i < 128; ++i) {
             memset(test_buffer, i, raw_len / key_size);
             unsigned char *result = xor_buffer(data_bytes[h], test_buffer, raw_len / key_size);
             unsigned long score = plaintext_frequency(result, raw_len / key_size);
             if (score > max_score) {
                 max_score = score;
                 key[h] = i;
-                printf("%c\n", i);
-                if (i >= 'a') {
-                    for (size_t j = 0; j < raw_len / key_size; ++j) {
-                        printf("%c", result);
-                    }
-                    printf("\n");
-                }
             }
             free(result);
         }
     }
-
-    printf("Key: %02x%02x\n", key[0], key[1]);
+    printf("Set 1 Challenge 6\n");
+    printf("Key: ");
+    for (size_t j = 0; j < key_size; ++j) {
+        printf("%c", key[j]);
+    }
+    printf("\n\n");
 
     unsigned char key_buffer[raw_len];
     fill_repeating(key_buffer, raw_len,(const char *) key, key_size);
 
     unsigned char *result = xor_buffer(raw_file, key_buffer, raw_len);
 
+    printf("Decrypted message: ");
     for (size_t i = 0; i < raw_len; ++i) {
-        printf("%c", result);
+        printf("%c", result[i]);
     }
     printf("\n");
+
+    free(result);
+    free(raw_file);
+
+    fclose(fp);
 
     return EXIT_SUCCESS;
 }

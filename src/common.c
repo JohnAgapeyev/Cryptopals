@@ -3,10 +3,6 @@
 #include <openssl/evp.h>
 #include "common.h"
 
-static void *checked_malloc(const size_t len);
-static void *checked_calloc(const size_t nmemb, const size_t size);
-static void *checked_realloc(void *ptr, const size_t len);
-
 static const char *hex_values = "0123456789abcdef";
 static const char *common_letters = "etoinshrdlu ";
 

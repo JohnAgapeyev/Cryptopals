@@ -3,6 +3,10 @@
 
 #include <stdlib.h>
 
+void *checked_malloc(const size_t len);
+void *checked_calloc(const size_t nmemb, const size_t size);
+void *checked_realloc(void *ptr, const size_t len);
+
 unsigned char *hex_encode(const unsigned char *buffer, const size_t len);
 unsigned char *hex_decode(const unsigned char *buffer, const size_t len);
 unsigned char *base_64_encode(const unsigned char *buffer, const size_t len);
