@@ -3,6 +3,13 @@
 #include <limits.h>
 #include "../common.h"
 
+void fill_repeating(unsigned char *buffer, const size_t len, const char *key, const size_t key_len) {
+    unsigned long index = 0;
+    for (size_t i = 0; i < len; ++i) {
+        buffer[i] = key[index++ % key_len];
+    }
+}
+
 unsigned long get_key_size(const unsigned char *data, const size_t len) {
     if (len < 80) {
         fprintf(stderr, "Data must be at least twice as long as largest tried key size\n");
@@ -44,8 +51,52 @@ int main(void) {
     size_t raw_len = (file_size / 4) * 3;
 
     unsigned long key_size = get_key_size(raw_file, raw_len);
-
     printf("%lu\n", key_size);
+
+    unsigned char data_bytes[key_size][raw_len / key_size];
+    for (size_t i = 0; i < key_size; ++i) {
+        for (size_t j = 0; j < raw_len / key_size; ++j) {
+            data_bytes[i][j] = raw_file[(j * key_size) + i];
+        }
+    }
+
+    unsigned char key[key_size];
+    unsigned long max_score = 0;
+
+    unsigned char test_buffer[raw_len / key_size];
+
+    for (size_t h = 0; h < key_size; ++h) {
+        max_score = 0;
+        for (size_t i = 0; i < 128; ++i) {
+            memset(test_buffer, i, raw_len / key_size);
+            unsigned char *result = xor_buffer(data_bytes[h], test_buffer, raw_len / key_size);
+            unsigned long score = plaintext_frequency(result, raw_len / key_size);
+            if (score > max_score) {
+                max_score = score;
+                key[h] = i;
+                printf("%c\n", i);
+                if (i >= 'a') {
+                    for (size_t j = 0; j < raw_len / key_size; ++j) {
+                        printf("%c", result);
+                    }
+                    printf("\n");
+                }
+            }
+            free(result);
+        }
+    }
+
+    printf("Key: %02x%02x\n", key[0], key[1]);
+
+    unsigned char key_buffer[raw_len];
+    fill_repeating(key_buffer, raw_len,(const char *) key, key_size);
+
+    unsigned char *result = xor_buffer(raw_file, key_buffer, raw_len);
+
+    for (size_t i = 0; i < raw_len; ++i) {
+        printf("%c", result);
+    }
+    printf("\n");
 
     return EXIT_SUCCESS;
 }
