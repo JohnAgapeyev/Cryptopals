@@ -191,3 +191,19 @@ bool detect_ecb(const unsigned char *cipher, const size_t len) {
     }
     return false;
 }
+
+unsigned char *pkcs7_pad(const unsigned char *mesg, const size_t mesg_len, const size_t padded_len) {
+    if (padded_len < mesg_len) {
+        fprintf(stderr, "Padded length must be equal to or greater than the length of the message being padded\n");
+        abort();
+    }
+
+    const size_t total_padded_len = ((mesg_len / padded_len) + 1) * padded_len;
+    unsigned char *padded_mesg = checked_malloc(total_padded_len);
+
+    memcpy(padded_mesg, mesg, mesg_len);
+
+    memset(padded_mesg + mesg_len, total_padded_len - mesg_len, total_padded_len - mesg_len);
+
+    return padded_mesg;
+}

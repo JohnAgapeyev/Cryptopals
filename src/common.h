@@ -19,5 +19,6 @@ unsigned char *xor_buffer(const unsigned char *left, const unsigned char *right,
 unsigned long plaintext_frequency(const unsigned char *input, const size_t len);
 unsigned long hamming_distance(const unsigned char *first, const unsigned char *second, const size_t len);
 bool detect_ecb(const unsigned char *cipher, const size_t len);
+unsigned char *pkcs7_pad(const unsigned char *mesg, const size_t mesg_len, const size_t padded_len);
 
 #endif
