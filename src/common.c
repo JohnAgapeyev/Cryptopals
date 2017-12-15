@@ -178,3 +178,16 @@ unsigned char *aes_128_ecb_decrypt(const unsigned char *buffer, const size_t len
     return plaintext;
 }
 
+bool detect_ecb(const unsigned char *cipher, const size_t len) {
+    for (size_t i = 0; i < (len / 16) - 1; ++i) {
+        for (size_t j = 0; j < (len / 16) - 1; ++j) {
+            if (j == i) {
+                continue;
+            }
+            if (memcmp(cipher + (i * 16), cipher + (j * 16), 16) == 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
