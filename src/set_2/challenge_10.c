@@ -34,5 +34,9 @@ int main(void) {
     printf("Set 2 Challenge 10 Decrypted File contents: ");
     print_n_chars(plaintext, plain_len);
 
+    fclose(fp);
+    free(raw_file);
+    free(plaintext);
+
     return EXIT_SUCCESS;
 }
