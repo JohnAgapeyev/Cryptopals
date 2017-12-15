@@ -37,6 +37,13 @@ void *checked_realloc(void *ptr, const size_t len) {
     return out;
 }
 
+void print_n_chars(const unsigned char *str, const size_t len) {
+    for (size_t i = 0; i < len; ++i) {
+        printf("%c\n", str[i]);
+    }
+    printf("\n");
+}
+
 unsigned char *hex_encode(const unsigned char *buffer, const size_t len) {
     unsigned char *out = checked_malloc((len * 2) + 1);
     for (size_t i = 0; i < len; ++i) {
