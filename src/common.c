@@ -39,7 +39,7 @@ void *checked_realloc(void *ptr, const size_t len) {
 
 void print_n_chars(const unsigned char *str, const size_t len) {
     for (size_t i = 0; i < len; ++i) {
-        printf("%c\n", str[i]);
+        printf("%c", str[i]);
     }
     printf("\n");
 }
