@@ -16,7 +16,7 @@ all release debug: common.h common.o $(patsubst %.c, %.o, $(src_list)) $(patsubs
 %.o: %.c common.h
 	$(CC) -c $(CFLAGS) $(patsubst %.o, %.c, $@) $(CLIBS) -o $@
 
-%.elf: %.o
+%.elf: %.o common.o
 	$(CC) $(CFLAGS) common.o $(patsubst %.elf, %.o, $@) $(CLIBS) -o $@
 
 ifeq (,$(filter debug, $(MAKECMDGOALS)))

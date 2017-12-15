@@ -124,10 +124,14 @@ unsigned char *aes_128_ecb_encrypt(const unsigned char *buffer, const size_t len
     }
 
     unsigned char *ciphertext = checked_malloc(len + EVP_CIPHER_block_size(EVP_aes_128_ecb()));
+    memset(ciphertext, 0, len + EVP_CIPHER_block_size(EVP_aes_128_ecb()));
 
     if (EVP_EncryptInit_ex(ctx, EVP_aes_128_ecb(), NULL, key, NULL) != 1) {
         openssl_error();
     }
+
+    //Disable padding
+    EVP_CIPHER_CTX_set_padding(ctx, 0);
 
     int tmp_len;
     if (EVP_EncryptUpdate(ctx, ciphertext, &tmp_len, buffer, len) != 1) {
@@ -140,7 +144,9 @@ unsigned char *aes_128_ecb_encrypt(const unsigned char *buffer, const size_t len
     }
     ciphertext_len += tmp_len;
 
-    *cipher_len = ciphertext_len;
+    if (cipher_len) {
+        *cipher_len = ciphertext_len;
+    }
 
     EVP_CIPHER_CTX_free(ctx);
 
@@ -160,6 +166,9 @@ unsigned char *aes_128_ecb_decrypt(const unsigned char *buffer, const size_t len
         openssl_error();
     }
 
+    //Disable padding
+    EVP_CIPHER_CTX_set_padding(ctx, 0);
+
     int tmp_len;
     if (EVP_DecryptUpdate(ctx, plaintext, &tmp_len, buffer, len) != 1) {
         openssl_error();
@@ -171,10 +180,93 @@ unsigned char *aes_128_ecb_decrypt(const unsigned char *buffer, const size_t len
     }
     plain_len += tmp_len;
 
-    *plaintext_len = plain_len;
+    if (plaintext_len) {
+        *plaintext_len = plain_len;
+    }
 
     EVP_CIPHER_CTX_free(ctx);
 
+    return plaintext;
+}
+
+unsigned char *aes_128_cbc_encrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, const unsigned char *iv, size_t *cipher_len) {
+    const unsigned char *plaintext = NULL;
+    size_t plain_len;
+
+    const size_t block_size = EVP_CIPHER_block_size(EVP_aes_128_ecb());
+
+    if (len % block_size != 0) {
+        //Message needs to be padded
+        plaintext = pkcs7_pad(buffer, len, block_size);
+        plain_len = ((len / block_size) + 1) * block_size;
+    } else {
+        plaintext = buffer;
+        plain_len = len;
+    }
+    unsigned char *ciphertext = checked_malloc(plain_len);
+    if (cipher_len) {
+        *cipher_len = plain_len;
+    }
+
+    unsigned char prev[block_size];
+    memcpy(prev, iv, block_size);
+
+    unsigned char block[block_size];
+    for (size_t i = 0; i < plain_len / block_size; ++i) {
+        memcpy(block, plaintext + (i * block_size), block_size);
+
+        unsigned char *xor_plain = xor_buffer(block, prev, block_size);
+
+        unsigned char *cipher_block = aes_128_ecb_encrypt(xor_plain, block_size, key, NULL);
+
+        //Save the encrypted block to the result buffer
+        memcpy(ciphertext + (i * block_size), cipher_block, block_size);
+
+        //Save the encrypted block to prev
+        memcpy(prev, cipher_block, block_size);
+
+        free(xor_plain);
+        free(cipher_block);
+    }
+    return ciphertext;
+}
+
+unsigned char *aes_128_cbc_decrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, const unsigned char *iv, size_t *plaintext_len) {
+    const size_t block_size = EVP_CIPHER_block_size(EVP_aes_128_ecb());
+    if (len % block_size != 0) {
+        fprintf(stderr, "Ciphertext is not a correctly padded length!\n");
+        abort();
+    }
+    unsigned char *plaintext = checked_malloc(len);
+
+    size_t plain_block_size;
+    if (plaintext_len) {
+        *plaintext_len = 0;
+    }
+
+    unsigned char prev[block_size];
+    memcpy(prev, iv, block_size);
+
+    unsigned char block[block_size];
+    for (size_t i = 0; i < len / block_size; ++i) {
+        memcpy(block, buffer + (i * block_size), block_size);
+
+        unsigned char *decrypted_block = aes_128_ecb_decrypt(block, block_size, key, &plain_block_size);
+        if (plaintext_len) {
+            *plaintext_len += plain_block_size;
+        }
+
+        unsigned char *plain_block = xor_buffer(decrypted_block, prev, plain_block_size);
+
+        //Save plaintext to outgoing buffer
+        memcpy(plaintext + (i * block_size), plain_block, plain_block_size);
+
+        //Save current ciphertext block to prev
+        memcpy(prev, block, plain_block_size);
+
+        free(decrypted_block);
+        free(plain_block);
+    }
     return plaintext;
 }
 
@@ -193,11 +285,6 @@ bool detect_ecb(const unsigned char *cipher, const size_t len) {
 }
 
 unsigned char *pkcs7_pad(const unsigned char *mesg, const size_t mesg_len, const size_t padded_len) {
-    if (padded_len < mesg_len) {
-        fprintf(stderr, "Padded length must be equal to or greater than the length of the message being padded\n");
-        abort();
-    }
-
     const size_t total_padded_len = ((mesg_len / padded_len) + 1) * padded_len;
     unsigned char *padded_mesg = checked_malloc(total_padded_len);
 
