@@ -7,6 +7,8 @@ void *checked_malloc(const size_t len);
 void *checked_calloc(const size_t nmemb, const size_t size);
 void *checked_realloc(void *ptr, const size_t len);
 
+unsigned char *aes_128_ecb_encrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, size_t *cipher_len);
+unsigned char *aes_128_ecb_decrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, size_t *plaintext_len);
 unsigned char *hex_encode(const unsigned char *buffer, const size_t len);
 unsigned char *hex_decode(const unsigned char *buffer, const size_t len);
 unsigned char *base_64_encode(const unsigned char *buffer, const size_t len);

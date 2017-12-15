@@ -1,10 +1,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <openssl/evp.h>
+#include <openssl/err.h>
 #include "common.h"
 
 static const char *hex_values = "0123456789abcdef";
 static const char *common_letters = "etoinshrdlu ";
+
+#define openssl_error() \
+    do {\
+        fprintf(stderr, "OpenSSL error %s at %s, line %d in function %s\n", ERR_error_string(ERR_get_error(), NULL), __FILE__, __LINE__, __func__); \
+        exit(EXIT_FAILURE);\
+    } while(0)
 
 void *checked_malloc(const size_t len) {
     void *out = malloc(len);
@@ -101,3 +108,66 @@ unsigned long hamming_distance(const unsigned char *first, const unsigned char *
     }
     return count;
 }
+
+unsigned char *aes_128_ecb_encrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, size_t *cipher_len) {
+    EVP_CIPHER_CTX *ctx;
+
+    if (!(ctx = EVP_CIPHER_CTX_new())) {
+        openssl_error();
+    }
+
+    unsigned char *ciphertext = checked_malloc(len + EVP_CIPHER_block_size(EVP_aes_128_ecb()));
+
+    if (EVP_EncryptInit_ex(ctx, EVP_aes_128_ecb(), NULL, key, NULL) != 1) {
+        openssl_error();
+    }
+
+    int tmp_len;
+    if (EVP_EncryptUpdate(ctx, ciphertext, &tmp_len, buffer, len) != 1) {
+        openssl_error();
+    }
+
+    int ciphertext_len = tmp_len;
+    if (EVP_EncryptFinal_ex(ctx, ciphertext + tmp_len, &tmp_len) != 1) {
+        openssl_error();
+    }
+    ciphertext_len += tmp_len;
+
+    *cipher_len = ciphertext_len;
+
+    EVP_CIPHER_CTX_free(ctx);
+
+    return ciphertext;
+}
+
+unsigned char *aes_128_ecb_decrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, size_t *plaintext_len) {
+    EVP_CIPHER_CTX *ctx;
+
+    if (!(ctx = EVP_CIPHER_CTX_new())) {
+        openssl_error();
+    }
+
+    unsigned char *plaintext = checked_malloc(len);
+
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_128_ecb(), NULL, key, NULL) != 1) {
+        openssl_error();
+    }
+
+    int tmp_len;
+    if (EVP_DecryptUpdate(ctx, plaintext, &tmp_len, buffer, len) != 1) {
+        openssl_error();
+    }
+
+    int plain_len = tmp_len;
+    if (EVP_DecryptFinal_ex(ctx, plaintext + tmp_len, &tmp_len) != 1) {
+        openssl_error();
+    }
+    plain_len += tmp_len;
+
+    *plaintext_len = plain_len;
+
+    EVP_CIPHER_CTX_free(ctx);
+
+    return plaintext;
+}
+
