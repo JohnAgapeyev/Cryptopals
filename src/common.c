@@ -271,8 +271,8 @@ unsigned char *aes_128_cbc_decrypt(const unsigned char *buffer, const size_t len
 }
 
 bool detect_ecb(const unsigned char *cipher, const size_t len) {
-    for (size_t i = 0; i < (len / 16) - 1; ++i) {
-        for (size_t j = 0; j < (len / 16) - 1; ++j) {
+    for (size_t i = 0; i < (len / 16); ++i) {
+        for (size_t j = 0; j < (len / 16); ++j) {
             if (j == i) {
                 continue;
             }
@@ -293,4 +293,13 @@ unsigned char *pkcs7_pad(const unsigned char *mesg, const size_t mesg_len, const
     memset(padded_mesg + mesg_len, total_padded_len - mesg_len, total_padded_len - mesg_len);
 
     return padded_mesg;
+}
+
+unsigned char *generate_random_aes_key(void) {
+    unsigned char *out = checked_malloc(EVP_CIPHER_block_size(EVP_aes_128_ecb()));
+    for (int i = 0; i < EVP_CIPHER_block_size(EVP_aes_128_ecb()); ++i) {
+        //Doesn't need to be cryptographically secure, just random
+        out[i] = rand();
+    }
+    return out;
 }
