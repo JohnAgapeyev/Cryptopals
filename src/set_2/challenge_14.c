@@ -15,15 +15,7 @@ unsigned char *encrypt_oracle(const unsigned char *mesg, const size_t len, size_
         key = generate_random_aes_key();
     }
     if (prefix == NULL) {
-#if 0
-start:
         prefix_len = rand() % USHRT_MAX;
-        if (prefix_len % 16) {
-            goto start;
-        }
-#else
-        prefix_len = 15;
-#endif
         prefix = checked_malloc(prefix_len);
         for (size_t i = 0; i < prefix_len; ++i) {
             prefix[i] = rand();
@@ -86,7 +78,7 @@ long detect_offset(const long block_size) {
     return -1;
 }
 
-char leak_byte(const unsigned char *prev_leak, const size_t pos, size_t block_size, const size_t offset) {
+char leak_byte(const unsigned char *prev_leak, const size_t pos, size_t block_size, const size_t offset, const size_t remainder) {
     if (pos >= block_size) {
         //Use multiple blocks if pos is greater than 1 block size
         block_size *= (pos / block_size) + 1;
@@ -94,37 +86,45 @@ char leak_byte(const unsigned char *prev_leak, const size_t pos, size_t block_si
 
     unsigned char dictionary[256][block_size];
     for (int i = 0; i < 256; ++i) {
-        unsigned char input[block_size];
+        unsigned char input[block_size + remainder];
 
-        memset(input, 'a', block_size - pos - 1);
+        memset(input, 'a', block_size + remainder - pos - 1);
         for (size_t j = 0; j < pos; ++j) {
-            input[block_size - pos + j - 1] = prev_leak[j];
+            input[block_size + remainder - pos + j - 1] = prev_leak[j];
         }
-        input[block_size - 1] = i;
+        input[block_size + remainder - 1] = i;
 
-        unsigned char *tmp = encrypt_oracle(input, block_size , NULL);
-        memcpy(dictionary[i], tmp + offset, block_size );
+        unsigned char *tmp = encrypt_oracle(input, block_size + remainder, NULL);
+        memcpy(dictionary[i], tmp + offset + (16 - remainder), block_size);
 
         free(tmp);
     }
 
-    unsigned char input[block_size - 1];
-    memset(input, 'a', block_size - 1);
+    unsigned char input[block_size + remainder - 1];
+    memset(input, 'a', block_size + remainder - 1);
     for (size_t j = 0; j < pos; ++j) {
-        input[block_size - pos + j - 1] = prev_leak[j];
+        input[block_size + remainder - pos + j - 1] = prev_leak[j];
     }
 
     size_t out_len;
-    unsigned char *byte_leak = encrypt_oracle(input, block_size - pos - 1, &out_len);
+    unsigned char *byte_leak = encrypt_oracle(input, block_size + remainder - pos - 1, &out_len);
+
     for (int i = 0; i < 256; ++i) {
         /*
          * Compare the output with the dictionary
          * memcmp the block size, except when the requested position causes the block size
          * to be larger than the ciphertext length, in which case, subtract a block
          */
-        if (memcmp(byte_leak + offset, dictionary[i], block_size - 16 + ((out_len > block_size) * 16)) == 0) {
-            free(byte_leak);
-            return i;
+        if ((out_len - offset - (16 - remainder)) > block_size + remainder) {
+            if (memcmp(byte_leak + offset + (16 - remainder), dictionary[i], block_size) == 0) {
+                free(byte_leak);
+                return i;
+            }
+        } else {
+            if (memcmp(byte_leak + offset + (16 - remainder), dictionary[i], block_size - 16) == 0) {
+                free(byte_leak);
+                return i;
+            }
         }
     }
     free(byte_leak);
@@ -144,7 +144,6 @@ int main(void) {
         fprintf(stderr, "We couldn't find the block size!\n");
         abort();
     }
-    printf("%d\n", block_size);
 
     if (!detect_ecb(ciphertext, cipher_len)) {
         fprintf(stderr, "How did this even happen?\n");
@@ -157,7 +156,6 @@ int main(void) {
         fprintf(stderr, "We couldn't find the block offset!\n");
         abort();
     }
-    printf("%lu %d\n", prefix_len, offset);
 
     //Unused char to prevent UB by passing nullptr to memset in encrypt_oracle
     unsigned char x = ' ';
@@ -166,35 +164,37 @@ int main(void) {
     unsigned char *empty = encrypt_oracle(&x, 0, &len);
     free(empty);
 
+    //Remove block offset from length
+    len -= offset;
+
     unsigned long max_score = 0;
     int index = 0;
-    for (int h = 0; h < block_size; ++h) {
-        printf("Trying offset: %lu\n", offset - h);
-        unsigned char prev_leak[1];
-        memset(prev_leak, 0, 1);
-        //for (size_t i = 0; i < len; ++i) {
-        for (size_t i = 0; i < 1; ++i) {
-            prev_leak[i] = leak_byte(prev_leak, i, block_size, offset - h);
+    for (int h = 0; h <= block_size; ++h) {
+        unsigned char prev_leak[len];
+        memset(prev_leak, 0, len);
+        for (size_t i = 0; i < len; ++i) {
+            prev_leak[i] = leak_byte(prev_leak, i, block_size, offset - block_size, h);
         }
 
-        unsigned long score = plaintext_frequency(prev_leak, 1);
-        //printf("Score received: %lu\n", score);
-        //print_n_chars(prev_leak, 50);
+        unsigned long score = plaintext_frequency(prev_leak, len);
         if (score > max_score) {
             max_score = score;
             index = h;
         }
     }
 
-    unsigned char prev_leak[50];
-    //for (size_t i = 0; i < len; ++i) {
-    for (size_t i = 0; i < 1; ++i) {
-        prev_leak[i] = leak_byte(prev_leak, i, block_size, offset - index);
+    //If the block offset is not equal to the prefix length, then the length will be short by
+    //an amount equal to the remainder.
+    //So I add the remainder here to compensate for that
+    len += index;
+
+    unsigned char prev_leak[len];
+    for (size_t i = 0; i < len; ++i) {
+        prev_leak[i] = leak_byte(prev_leak, i, block_size, offset - block_size, index);
     }
 
-    //printf("Set 2 Challenge 12 Decrypted output: ");
-    //print_n_chars(prev_leak, len);
-    print_n_chars(prev_leak, 1);
+    printf("Set 2 Challenge 14 Decrypted output: ");
+    print_n_chars(prev_leak, len);
 
     free(key);
     free(prefix);
