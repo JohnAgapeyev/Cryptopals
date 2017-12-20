@@ -24,7 +24,8 @@ unsigned char *random_encryption(const unsigned char *mesg, const size_t len, si
     if (rand() % 2) {
         printf("Rand has chosen to use ECB\n");
         unsigned char *padded = pkcs7_pad(plaintext, len + (garbage_count * 2), 16);
-        unsigned char *rtn = aes_128_ecb_encrypt(padded, (((len + (garbage_count * 2)) / 16) + 1) * 16, key, out_len);
+        unsigned long padded_len = get_padded_length(len + (garbage_count * 2), 16);
+        unsigned char *rtn = aes_128_ecb_encrypt(padded, padded_len, key, out_len);
         free(key);
         free(padded);
         return rtn;

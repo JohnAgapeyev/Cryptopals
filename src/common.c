@@ -198,7 +198,7 @@ unsigned char *aes_128_cbc_encrypt(const unsigned char *buffer, const size_t len
     if (len % block_size != 0) {
         //Message needs to be padded
         plaintext = pkcs7_pad(buffer, len, block_size);
-        plain_len = ((len / block_size) + 1) * block_size;
+        plain_len = get_padded_length(len, block_size);
     } else {
         plaintext = buffer;
         plain_len = len;
@@ -285,14 +285,17 @@ bool detect_ecb(const unsigned char *cipher, const size_t len) {
 }
 
 unsigned char *pkcs7_pad(const unsigned char *mesg, const size_t mesg_len, const size_t padded_len) {
-    const size_t total_padded_len = ((mesg_len / padded_len) + 1) * padded_len;
+    const size_t total_padded_len = get_padded_length(mesg_len, padded_len);
     unsigned char *padded_mesg = checked_malloc(total_padded_len);
 
     memcpy(padded_mesg, mesg, mesg_len);
-
     memset(padded_mesg + mesg_len, total_padded_len - mesg_len, total_padded_len - mesg_len);
 
     return padded_mesg;
+}
+
+unsigned long get_padded_length(const size_t len, const size_t padded_len) {
+    return ((len / padded_len) + 1) * padded_len;
 }
 
 unsigned char *generate_random_aes_key(void) {

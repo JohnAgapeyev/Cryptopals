@@ -18,6 +18,7 @@ unsigned long plaintext_frequency(const unsigned char *input, const size_t len);
 unsigned long hamming_distance(const unsigned char *first, const unsigned char *second, const size_t len);
 bool detect_ecb(const unsigned char *cipher, const size_t len);
 unsigned char *pkcs7_pad(const unsigned char *mesg, const size_t mesg_len, const size_t padded_len);
+unsigned long get_padded_length(const size_t len, const size_t padded_len);
 unsigned char *aes_128_ecb_encrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, size_t *cipher_len);
 unsigned char *aes_128_ecb_decrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, size_t *plaintext_len);
 unsigned char *aes_128_cbc_encrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, const unsigned char *iv, size_t *cipher_len);

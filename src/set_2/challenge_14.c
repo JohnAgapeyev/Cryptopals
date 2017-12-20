@@ -31,7 +31,8 @@ unsigned char *encrypt_oracle(const unsigned char *mesg, const size_t len, size_
     memcpy(plaintext + prefix_len + len, decoded_unknown, decoded_len);
 
     unsigned char *padded = pkcs7_pad(plaintext, prefix_len + len + decoded_len, 16);
-    unsigned char *rtn = aes_128_ecb_encrypt(padded, (((prefix_len + len + decoded_len) / 16) + 1) * 16, key, out_len);
+    unsigned long padded_len = get_padded_length(prefix_len + len + decoded_len, 16);
+    unsigned char *rtn = aes_128_ecb_encrypt(padded, padded_len, key, out_len);
     free(padded);
     free(decoded_unknown);
     return rtn;
