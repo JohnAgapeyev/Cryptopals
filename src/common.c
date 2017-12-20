@@ -298,6 +298,19 @@ unsigned long get_padded_length(const size_t len, const size_t padded_len) {
     return ((len / padded_len) + 1) * padded_len;
 }
 
+bool validate_pkcs7_padding(const unsigned char *mesg, const size_t len) {
+    unsigned char padding_length = mesg[len - 1];
+    if (padding_length > len) {
+        return false;
+    }
+    for (size_t i = 1; i <= padding_length; ++i) {
+        if (mesg[len - i] != padding_length) {
+            return false;
+        }
+    }
+    return true;
+}
+
 unsigned char *generate_random_aes_key(void) {
     unsigned char *out = checked_malloc(EVP_CIPHER_block_size(EVP_aes_128_ecb()));
     for (int i = 0; i < EVP_CIPHER_block_size(EVP_aes_128_ecb()); ++i) {
