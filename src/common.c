@@ -203,6 +203,7 @@ unsigned char *aes_128_cbc_encrypt(const unsigned char *buffer, const size_t len
         plaintext = buffer;
         plain_len = len;
     }
+
     unsigned char *ciphertext = checked_malloc(plain_len);
     if (cipher_len) {
         *cipher_len = plain_len;
@@ -301,6 +302,9 @@ unsigned long get_padded_length(const size_t len, const size_t padded_len) {
 bool validate_pkcs7_padding(const unsigned char *mesg, const size_t len) {
     unsigned char padding_length = mesg[len - 1];
     if (padding_length > len) {
+        return false;
+    }
+    if (padding_length == 0) {
         return false;
     }
     for (size_t i = 1; i <= padding_length; ++i) {
