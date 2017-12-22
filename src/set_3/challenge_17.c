@@ -49,7 +49,7 @@ unsigned char *encrypt_oracle(size_t *out_len) {
     iv = generate_random_aes_key();
 
     //size_t index = rand() % 10;
-    size_t index = 1;
+    size_t index = 9;
     printf("%zu\n", index);
     printf("%s\n", unknown_strings[index]);
 
@@ -83,32 +83,41 @@ unsigned char *decrypt_mesg(const unsigned char *mesg, const size_t len) {
     memset(out, 0xff, len);
 
     unsigned char buffer[len];
+    unsigned char tmp_iv[16];
+    memcpy(tmp_iv, iv, 16);
+
     for (int i = len - 1; i >= 16; --i) {
     //int i = len - 1; {
         for (unsigned int j = 0; j < 256; ++j) {
             if (j == (len - i)) {
-                continue;
+                if (out[i + 1] == (len - i)) {
+                    //This is ok
+                } else {
+                    continue;
+                }
             }
             memcpy(buffer, mesg, len);
+            memcpy(iv, tmp_iv, 16);
 
             for (int k = len - 1; k > i; --k) {
                 if (k < 16) {
                     printf("Woops\n");
+                    iv[k] ^= out[k] ^ (len - i);
                 } else {
                     //buffer[k] = out[i + 1] ^ (len - i);
-                    buffer[k - 16 - 0] ^= out[i + 1] ^ (len - i);
+                    buffer[k - 16] ^= out[k] ^ (len - i);
                 }
             }
 
             if (i < 16) {
                 printf("Bap\n");
+                iv[i] ^= j ^ (len - i);
             } else {
                 //buffer[i] = buffer[i - 16] ^ j ^ (len - i);
-                buffer[i - 16 - 0] ^= j ^ (len - i);
+                buffer[i - 16] ^= j ^ (len - i);
             }
             //buffer[len - 1] = j ^ 0x01;
 
-            //printf("%02x\n", len - i);
 
             if (padding_oracle(buffer, len)) {
                 out[i] = j;
@@ -143,11 +152,12 @@ unsigned char decrypt_mesg(const unsigned char *mesg, const size_t len) {
 }
 
 int main(void) {
-    //srand(time(NULL));
+    srand(time(NULL));
     fill_unknown();
 
     size_t len;
     unsigned char *ciphertext = encrypt_oracle(&len);
+
     //padding_oracle(ciphertext, len);
     //if (padding_oracle(ciphertext, len)) {
         //printf("Padding is good\n");
@@ -172,6 +182,17 @@ int main(void) {
     //printf("%c\n", decrypt_mesg(ciphertext, len));
 
     print_n_chars(plaintext, len);
+    for (size_t i = 0; i < len ; ++i) {
+        printf("%02x ", plaintext[i]);
+    }
+    printf("\n");
+
+    plaintext = decrypt_mesg(ciphertext, len - 16);
+    print_n_chars(plaintext, len - 16);
+    for (size_t i = 0; i < len - 16; ++i) {
+        printf("%02x ", plaintext[i]);
+    }
+    printf("\n");
 
     free(key);
     return EXIT_SUCCESS;
