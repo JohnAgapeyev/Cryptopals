@@ -190,19 +190,10 @@ unsigned char *aes_128_ecb_decrypt(const unsigned char *buffer, const size_t len
 }
 
 unsigned char *aes_128_cbc_encrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, const unsigned char *iv, size_t *cipher_len) {
-    const unsigned char *plaintext = NULL;
-    size_t plain_len;
-
     const size_t block_size = EVP_CIPHER_block_size(EVP_aes_128_ecb());
 
-    if (len % block_size != 0) {
-        //Message needs to be padded
-        plaintext = pkcs7_pad(buffer, len, block_size);
-        plain_len = get_padded_length(len, block_size);
-    } else {
-        plaintext = buffer;
-        plain_len = len;
-    }
+    unsigned char *plaintext = pkcs7_pad(buffer, len, block_size);
+    size_t plain_len = get_padded_length(len, block_size);
 
     unsigned char *ciphertext = checked_malloc(plain_len);
     if (cipher_len) {
@@ -229,6 +220,7 @@ unsigned char *aes_128_cbc_encrypt(const unsigned char *buffer, const size_t len
         free(xor_plain);
         free(cipher_block);
     }
+    free(plaintext);
     return ciphertext;
 }
 

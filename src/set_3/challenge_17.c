@@ -48,10 +48,7 @@ unsigned char *encrypt_oracle(size_t *out_len) {
     }
     iv = generate_random_aes_key();
 
-    //size_t index = rand() % 10;
-    size_t index = 9;
-    printf("%zu\n", index);
-    printf("%s\n", unknown_strings[index]);
+    size_t index = rand() % 10;
 
     unsigned char *rtn = aes_128_cbc_encrypt(unknown_strings[index], strlen((const char *) unknown_strings[index]), key, iv, out_len);
     return rtn;
@@ -61,94 +58,56 @@ bool padding_oracle(const unsigned char *mesg, const size_t len) {
     size_t plain_len;
     unsigned char *plaintext = aes_128_cbc_decrypt(mesg, len, key, iv, &plain_len);
 
-    //printf("Last byte: %02x\n", plaintext[plain_len - 1]);
-
-    //print_n_chars(plaintext, plain_len);
-
-#if 0
-    for (size_t i = 0; i < plain_len; ++i) {
-        printf("%02x", plaintext[i]);
-    }
-    printf("\n");
-#endif
-
     bool rtn = validate_pkcs7_padding(plaintext, plain_len);
     free(plaintext);
     return rtn;
 }
 
-#if 1
-unsigned char *decrypt_mesg(const unsigned char *mesg, const size_t len) {
-    unsigned char *out = checked_malloc(len);
-    memset(out, 0xff, len);
-
+unsigned char *decrypt_block(const unsigned char *prev, const unsigned char *target, const size_t len) {
+    unsigned char *out = checked_calloc((len / 2) + 1, sizeof(unsigned char));
     unsigned char buffer[len];
-    unsigned char tmp_iv[16];
-    memcpy(tmp_iv, iv, 16);
-
     for (int i = len - 1; i >= 16; --i) {
-    //int i = len - 1; {
         for (unsigned int j = 0; j < 256; ++j) {
-            if (j == (len - i)) {
-                if (out[i + 1] == (len - i)) {
-                    //This is ok
-                } else {
-                    continue;
-                }
+            /*
+             * Don't try the number equal to the padding since the later xors
+             * would cancel each other out, returning a false positive.
+             * One exception is the last byte of the padding, where the guess
+             * must be equal to the padding, hence the second predicate.
+             */
+            if (j == (len - i) && out[i + 1 - 16] != (len - i)) {
+                continue;
             }
-            memcpy(buffer, mesg, len);
-            memcpy(iv, tmp_iv, 16);
+            memcpy(buffer, prev, len / 2);
+            memcpy(buffer + (len / 2), target, len / 2);
 
             for (int k = len - 1; k > i; --k) {
-                if (k < 16) {
-                    printf("Woops\n");
-                    iv[k] ^= out[k] ^ (len - i);
-                } else {
-                    //buffer[k] = out[i + 1] ^ (len - i);
-                    buffer[k - 16] ^= out[k] ^ (len - i);
-                }
+                buffer[k - 16] ^= out[k - 16] ^ (len - i);
             }
 
-            if (i < 16) {
-                printf("Bap\n");
-                iv[i] ^= j ^ (len - i);
-            } else {
-                //buffer[i] = buffer[i - 16] ^ j ^ (len - i);
-                buffer[i - 16] ^= j ^ (len - i);
-            }
-            //buffer[len - 1] = j ^ 0x01;
-
+            buffer[i - 16] ^= j ^ (len - i);
 
             if (padding_oracle(buffer, len)) {
-                out[i] = j;
-                printf("%d\n", j);
+                out[i - 16] = j;
                 break;
             }
         }
-        printf("Index %d\n", i);
     }
     return out;
-#else
-unsigned char decrypt_mesg(const unsigned char *mesg, const size_t len) {
-    //printf("%zu\n\n\n", len);
-    for (unsigned int j = 0; j < 256; ++j) {
-        if (j == 1) {
-            continue;
-        }
-        unsigned char buffer[len];
-        memcpy(buffer, mesg, len);
+}
 
-        //buffer[47] = buffer[47] ^ j ^ 0x01;
-        buffer[47] ^= j ^ 0x01;
-        printf("Trying: %d\n", j);
+unsigned char *decrypt_mesg(const unsigned char *mesg, const size_t len) {
+    unsigned char *out = checked_malloc(len);
 
-        if (padding_oracle(buffer, len)) {
-            printf("%d\n", j);
-            return j;
-        }
+    unsigned char *initial_block = decrypt_block(iv, mesg, 32);
+    memcpy(out, initial_block, 16);
+    free(initial_block);
+
+    for (size_t i = 0; i < (len / 16) - 1; ++i) {
+        unsigned char *plain_block = decrypt_block(mesg + (i * 16), mesg + ((i + 1) * 16), 32);
+        memcpy(out + ((i + 1) * 16), plain_block, 16);
+        free(plain_block);
     }
-    return -1;
-#endif
+    return out;
 }
 
 int main(void) {
@@ -158,42 +117,22 @@ int main(void) {
     size_t len;
     unsigned char *ciphertext = encrypt_oracle(&len);
 
-    //padding_oracle(ciphertext, len);
-    //if (padding_oracle(ciphertext, len)) {
-        //printf("Padding is good\n");
-    //} else {
-        //printf("Padding is bad\n");
-    //}
-
-    //unsigned char buffer[len];
-    //memcpy(buffer, ciphertext, len);
-
-    //buffer[47] = buffer[47] ^ j ^ 0x01;
-    //buffer[47] = buffer[63] ^ 0x08 ^ 0x01;
-    //buffer[47] = buffer[47] ^ 8 ^ 1;
-    //buffer[47] ^= 8 ^ 1;
-
-    //if (!padding_oracle(buffer, len)) {
-        //abort();
-    //}
-    //printf("We're good\n");
-
     unsigned char *plaintext = decrypt_mesg(ciphertext, len);
-    //printf("%c\n", decrypt_mesg(ciphertext, len));
 
+    //Remove padding from length
+    len -= plaintext[len - 1];
+
+    printf("Set 3 Challenge 17 Decrypted string: ");
     print_n_chars(plaintext, len);
-    for (size_t i = 0; i < len ; ++i) {
-        printf("%02x ", plaintext[i]);
-    }
-    printf("\n");
 
-    plaintext = decrypt_mesg(ciphertext, len - 16);
-    print_n_chars(plaintext, len - 16);
-    for (size_t i = 0; i < len - 16; ++i) {
-        printf("%02x ", plaintext[i]);
-    }
-    printf("\n");
-
+    free(plaintext);
+    free(ciphertext);
     free(key);
+    free(iv);
+
+    for (int i = 0; i < 10; ++i) {
+        free(unknown_strings[i]);
+    }
+
     return EXIT_SUCCESS;
 }
