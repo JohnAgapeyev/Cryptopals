@@ -263,6 +263,43 @@ unsigned char *aes_128_cbc_decrypt(const unsigned char *buffer, const size_t len
     return plaintext;
 }
 
+unsigned char *aes_128_ctr_encrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, const unsigned long long nonce) {
+    unsigned long long counter = 0;
+
+    unsigned char input[sizeof(unsigned long long) * 2];
+    memcpy(input, &nonce, sizeof(unsigned long long));
+    memcpy(input + sizeof(unsigned long long), &counter, sizeof(unsigned long long));
+
+    unsigned char *out = checked_malloc(len);
+
+    for (size_t i = 0; i < (len / 16); ++i) {
+        unsigned char *output = aes_128_ecb_encrypt(input, sizeof(unsigned long long) * 2, key, NULL);
+        unsigned char *cipher_block = xor_buffer(output, buffer + (i * 16), 16);
+
+        memcpy(out + (i * 16), cipher_block, 16);
+
+        free(output);
+        free(cipher_block);
+
+        ++counter;
+
+        memcpy(input + sizeof(unsigned long long), &counter, sizeof(unsigned long long));
+    }
+    unsigned char *output = aes_128_ecb_encrypt(input, sizeof(unsigned long long) * 2, key, NULL);
+    unsigned char *cipher_block = xor_buffer(output, buffer + ((len / 16) * 16), len - ((len / 16) * 16));
+
+    memcpy(out + ((len / 16) * 16), cipher_block, len - ((len / 16) * 16));
+
+    free(output);
+    free(cipher_block);
+
+    return out;
+}
+
+unsigned char *aes_128_ctr_decrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, const unsigned long long nonce) {
+    return aes_128_ctr_encrypt(buffer, len, key, nonce);
+}
+
 bool detect_ecb(const unsigned char *cipher, const size_t len) {
     for (size_t i = 0; i < (len / 16); ++i) {
         for (size_t j = 0; j < (len / 16); ++j) {
