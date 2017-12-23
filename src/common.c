@@ -1,11 +1,13 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include "common.h"
 
 static const char *hex_values = "0123456789abcdef";
-static const char *common_letters = "etoinshrdlu ";
+static const char *common_letters = "etaoinshrdlucmfwyp ";
 
 #define openssl_error() \
     do {\
@@ -94,7 +96,7 @@ unsigned long plaintext_frequency(const unsigned char *input, const size_t len) 
     unsigned long score = 0;
     for (size_t i = 0; i < strlen(common_letters); ++i) {
         for (size_t j = 0; j < len; ++j) {
-            if (input[j] == common_letters[i]) {
+            if (tolower(input[j]) == common_letters[i]) {
                 ++score;
             }
         }

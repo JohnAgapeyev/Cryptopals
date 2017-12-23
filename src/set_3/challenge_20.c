@@ -4,11 +4,11 @@
 #include <limits.h>
 #include "../common.h"
 
-unsigned char *key = NULL;
+unsigned char *aes_key = NULL;
 
 unsigned char *get_target_ciphertext(FILE *fp, size_t *cipher_len) {
-    if (key == NULL) {
-        key = generate_random_aes_key();
+    if (aes_key == NULL) {
+        aes_key = generate_random_aes_key();
     }
     char input[1025];
     size_t min = UINT_MAX;
@@ -19,6 +19,7 @@ unsigned char *get_target_ciphertext(FILE *fp, size_t *cipher_len) {
         if (decoded_len < min) {
             min = decoded_len;
         }
+        free(decoded_unknown);
     }
     unsigned char *ciphertext = checked_malloc(60 * min);
     rewind(fp);
@@ -28,10 +29,13 @@ unsigned char *get_target_ciphertext(FILE *fp, size_t *cipher_len) {
         unsigned char *decoded_unknown = base_64_decode((const unsigned char *) input, strlen(input) - 1);
         size_t decoded_len = ((strlen(input) - 1) / 4) * 3;
 
-        unsigned char *encrypted = aes_128_ctr_encrypt(decoded_unknown, decoded_len, key, 0);
+        unsigned char *encrypted = aes_128_ctr_encrypt(decoded_unknown, decoded_len, aes_key, 0);
 
         memcpy(ciphertext + (index * min), encrypted, min);
         ++index;
+
+        free(decoded_unknown);
+        free(encrypted);
     }
 
     *cipher_len = 60 * min;
@@ -84,14 +88,17 @@ int main(void) {
             free(result);
         }
     }
-    print_n_chars(key, key_size);
-
     unsigned char key_buffer[cipher_len];
     fill_repeating(key_buffer, cipher_len, (const char *) key, key_size);
-
     unsigned char *result = xor_buffer(ciphertext, key_buffer, cipher_len);
 
+    printf("Set 3 Challenge 20 Truncated decrypted string: ");
     print_n_chars(result, cipher_len);
+
+    free(aes_key);
+    free(ciphertext);
+    free(result);
+    fclose(fp);
 
     return EXIT_SUCCESS;
 }
