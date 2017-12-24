@@ -11,13 +11,13 @@ src_list = $(foreach dir, $(8count), $(wildcard set_$(dir)/*.c))
 obj_list = $(foreach dir, $(8count), $(wildcard set_$(dir)/*.o))
 elf_list = $(foreach dir, $(8count), $(wildcard set_$(dir)/*.elf))
 
-all release debug: common.h common.o $(patsubst %.c, %.o, $(src_list)) $(patsubst %.c, %.elf, $(src_list))
+all release debug: common.h common.o mersenne.h mersenne.o $(patsubst %.c, %.o, $(src_list)) $(patsubst %.c, %.elf, $(src_list))
 
-%.o: %.c common.h
+%.o: %.c common.h mersenne.h
 	$(CC) -c $(CFLAGS) $(patsubst %.o, %.c, $@) $(CLIBS) -o $@
 
-%.elf: %.o common.o
-	$(CC) $(CFLAGS) common.o $(patsubst %.elf, %.o, $@) $(CLIBS) -o $@
+%.elf: %.o common.o mersenne.o
+	$(CC) $(CFLAGS) common.o mersenne.o $(patsubst %.elf, %.o, $@) $(CLIBS) -o $@
 
 ifeq (,$(filter debug, $(MAKECMDGOALS)))
 $(eval CFLAGS = $(BASEFLAGS) $(RELEASEFLAGS))
