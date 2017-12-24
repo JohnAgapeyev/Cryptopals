@@ -4,7 +4,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <limits.h>
-#include <omp.h>
 #include "../common.h"
 #include "../mersenne.h"
 
