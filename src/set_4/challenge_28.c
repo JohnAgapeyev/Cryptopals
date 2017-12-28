@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include "../common.h"
 #include "../sha1.h"
+#include "../test.h"
 
 uint32_t swap(uint32_t num) {
     uint32_t swapped = ((num>>24)&0xff) | // move byte 3 to byte 0
@@ -15,6 +16,7 @@ uint32_t swap(uint32_t num) {
 int main(void) {
     //const char *mesg = "abc";
 
+#if 0
     char mesg[64];
     memset(mesg, 'a', 64);
 
@@ -83,10 +85,12 @@ int main(void) {
         printf("%02x", hash[i]);
     }
     printf("\n");
+#else
+    const char *mesg = "abc";
+    //const char *mesg = "The quick brown fox jumps over the lazy dog";
 
-
-
-
+    hash((const unsigned char *) mesg, strlen(mesg));
+#endif
 
     return EXIT_SUCCESS;
 }
