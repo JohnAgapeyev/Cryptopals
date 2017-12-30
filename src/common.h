@@ -27,5 +27,6 @@ unsigned char *aes_128_cbc_decrypt(const unsigned char *buffer, const size_t len
 unsigned char *aes_128_ctr_encrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, const unsigned long long nonce);
 unsigned char *aes_128_ctr_decrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, const unsigned long long nonce);
 unsigned char *generate_random_aes_key(void);
+unsigned char *sha1_hash(const unsigned char *mesg, const size_t len);
 
 #endif

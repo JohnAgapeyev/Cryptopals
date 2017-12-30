@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <openssl/evp.h>
 #include <openssl/err.h>
+#include <openssl/sha.h>
 #include "common.h"
 
 static const char *hex_values = "0123456789abcdef";
@@ -352,5 +353,25 @@ unsigned char *generate_random_aes_key(void) {
         //Doesn't need to be cryptographically secure, just random
         out[i] = rand();
     }
+    return out;
+}
+
+unsigned char *sha1_hash(const unsigned char *mesg, const size_t len) {
+    SHA_CTX ctx;
+
+    if (SHA1_Init(&ctx) != 1) {
+        openssl_error();
+    }
+
+    if (SHA1_Update(&ctx, mesg, len) != 1) {
+        openssl_error();
+    }
+
+    unsigned char *out = checked_malloc(20);
+
+    if (SHA1_Final(out, &ctx) != 1) {
+        openssl_error();
+    }
+
     return out;
 }
