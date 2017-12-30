@@ -22,5 +22,8 @@ int main(void) {
         printf("%02x", mac[i]);
     }
     printf("\n");
+
+    free(mac);
+
     return EXIT_SUCCESS;
 }
