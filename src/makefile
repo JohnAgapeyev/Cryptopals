@@ -2,7 +2,7 @@ CC=gcc
 BASEFLAGS=-Wall -Wextra -std=c11 -pedantic -D_POSIX_C_SOURCE=200809L -pipe
 DEBUGFLAGS=-fsanitize=undefined -ggdb -O0
 RELEASEFLAGS=-O3 -march=native -flto -DNDEBUG
-CLIBS=-lcrypto
+CLIBS=-lcrypto -lm
 
 8count := 1 2 3 4 5 6 7 8
 

@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
+#include <openssl/bn.h>
 
 void *checked_malloc(const size_t len);
 void *checked_calloc(const size_t nmemb, const size_t size);
@@ -28,5 +29,6 @@ unsigned char *aes_128_ctr_encrypt(const unsigned char *buffer, const size_t len
 unsigned char *aes_128_ctr_decrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, const unsigned long long nonce);
 unsigned char *generate_random_aes_key(void);
 unsigned char *sha1_hash(const unsigned char *mesg, const size_t len);
+BIGNUM *hex_to_bignum(const char *str);
 
 #endif

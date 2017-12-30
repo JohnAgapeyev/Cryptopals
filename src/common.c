@@ -5,6 +5,7 @@
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include <openssl/sha.h>
+#include <openssl/bn.h>
 #include "common.h"
 
 static const char *hex_values = "0123456789abcdef";
@@ -373,5 +374,11 @@ unsigned char *sha1_hash(const unsigned char *mesg, const size_t len) {
         openssl_error();
     }
 
+    return out;
+}
+
+BIGNUM *hex_to_bignum(const char *str) {
+    BIGNUM *out = NULL;
+    BN_hex2bn(&out, str);
     return out;
 }
