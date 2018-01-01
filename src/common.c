@@ -53,6 +53,7 @@ unsigned char *hex_encode(const unsigned char *buffer, const size_t len) {
     for (size_t i = 0; i < len; ++i) {
         snprintf((char *) out + (i * 2), 3, "%02x", buffer[i]);
     }
+    out[len * 2] = '\0';
     return out;
 }
 
@@ -375,6 +376,64 @@ unsigned char *sha1_hash(const unsigned char *mesg, const size_t len) {
     }
 
     return out;
+}
+
+unsigned char *sha256_hash(const unsigned char *mesg, const size_t len) {
+    SHA256_CTX ctx;
+
+    if (SHA256_Init(&ctx) != 1) {
+        openssl_error();
+    }
+
+    if (SHA256_Update(&ctx, mesg, len) != 1) {
+        openssl_error();
+    }
+
+    unsigned char *out = checked_malloc(32);
+
+    if (SHA256_Final(out, &ctx) != 1) {
+        openssl_error();
+    }
+
+    return out;
+}
+
+unsigned char *hmac_sha256(const unsigned char *mesg, const size_t mesg_len, const unsigned char *key, const size_t key_len) {
+    unsigned char padded_key[32];
+    if (key_len <= 32) {
+        memset(padded_key, 0, 32);
+        memcpy(padded_key, key, key_len);
+    } else {
+        unsigned char *hashed_key = sha256_hash(key, key_len);
+        memcpy(padded_key, hashed_key, 32);
+        free(hashed_key);
+    }
+
+    unsigned char outer[32];
+    unsigned char inner[32];
+    memset(outer, 0x5c, 32);
+    memset(inner, 0x36, 32);
+
+    unsigned char *inner_xor = xor_buffer(inner, padded_key, 32);
+    unsigned char *outer_xor = xor_buffer(outer, padded_key, 32);
+
+    unsigned char inner_input[32 + mesg_len];
+    memcpy(inner_input, inner_xor, 32);
+    memcpy(inner_input + 32, mesg, mesg_len);
+
+    unsigned char *inner_hash = sha256_hash(inner_input, 32 + mesg_len);
+
+    unsigned char final_input[64];
+    memcpy(final_input, outer_xor, 32);
+    memcpy(final_input + 32, inner_hash, 32);
+
+    unsigned char *rtn = sha256_hash(final_input, 64);
+
+    free(inner_xor);
+    free(outer_xor);
+    free(inner_hash);
+
+    return rtn;
 }
 
 BIGNUM *hex_to_bignum(const char *str) {

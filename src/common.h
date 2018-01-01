@@ -29,6 +29,8 @@ unsigned char *aes_128_ctr_encrypt(const unsigned char *buffer, const size_t len
 unsigned char *aes_128_ctr_decrypt(const unsigned char *buffer, const size_t len, const unsigned char *key, const unsigned long long nonce);
 unsigned char *generate_random_aes_key(void);
 unsigned char *sha1_hash(const unsigned char *mesg, const size_t len);
+unsigned char *sha256_hash(const unsigned char *mesg, const size_t len);
+unsigned char *hmac_sha256(const unsigned char *mesg, const size_t mesg_len, const unsigned char *key, const size_t key_len);
 BIGNUM *hex_to_bignum(const char *str);
 
 #endif
