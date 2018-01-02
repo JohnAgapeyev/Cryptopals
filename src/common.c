@@ -57,6 +57,8 @@ unsigned char *hex_encode(const unsigned char *buffer, const size_t len) {
     return out;
 }
 
+
+
 unsigned char *hex_decode(const unsigned char *buffer, const size_t len) {
     if (len & 1) {
         fprintf(stderr, "Length must be divisible by 2\n");
@@ -65,8 +67,8 @@ unsigned char *hex_decode(const unsigned char *buffer, const size_t len) {
     unsigned char *out = checked_malloc(len / 2);
 
     for (size_t i = 0; i < len / 2; ++i) {
-        out[i] = ((unsigned char) ((const char *) memchr(hex_values, buffer[i * 2], strlen(hex_values)) - hex_values)) * 16;
-        out[i] += (unsigned char) ((const char *) memchr(hex_values, buffer[i * 2 + 1], strlen(hex_values)) - hex_values);
+        out[i] = ((unsigned char) ((const char *) memchr(hex_values, tolower(buffer[i * 2]), strlen(hex_values)) - hex_values)) * 16;
+        out[i] += (unsigned char) ((const char *) memchr(hex_values, tolower(buffer[i * 2 + 1]), strlen(hex_values)) - hex_values);
     }
     return out;
 }
@@ -440,4 +442,68 @@ BIGNUM *hex_to_bignum(const char *str) {
     BIGNUM *out = NULL;
     BN_hex2bn(&out, str);
     return out;
+}
+
+const RSA_Keypair *generate_rsa_keys(const BIGNUM *exponent, const unsigned long bits) {
+    BIGNUM *p = BN_new();
+    BIGNUM *q = BN_new();
+
+    BN_generate_prime_ex(p, bits / 2, 0, NULL, NULL, NULL);
+    BN_generate_prime_ex(q, bits / 2, 0, NULL, NULL, NULL);
+
+    BIGNUM *one = BN_new();
+    BN_one(one);
+
+    BIGNUM *temp_p = BN_new();
+    BN_sub(temp_p, p, one);
+
+    BIGNUM *temp_q = BN_new();
+    BN_sub(temp_q, q, one);
+
+    BN_CTX *ctx = BN_CTX_new();
+
+    BIGNUM *et = BN_new();
+    BN_mul(et, temp_p, temp_q, ctx);
+
+    BIGNUM *d = BN_mod_inverse(NULL, exponent, et, ctx);
+
+    BIGNUM *N = BN_new();
+    BN_mul(N, p, q, ctx);
+
+    RSA_Keypair *key_pair = checked_malloc(sizeof(RSA_Keypair));
+
+    key_pair->public = BN_dup(exponent);
+    key_pair->private = d;
+    key_pair->modulus = N;
+
+    BN_clear_free(p);
+    BN_clear_free(q);
+    BN_free(one);
+    BN_clear_free(temp_p);
+    BN_clear_free(temp_q);
+
+    BN_CTX_free(ctx);
+
+    BN_clear_free(et);
+
+    return key_pair;
+}
+
+void rsa_keypair_free(const RSA_Keypair *key_pair) {
+    BN_free(key_pair->public);
+    BN_clear_free(key_pair->private);
+    BN_free(key_pair->modulus);
+    free((void *) key_pair);
+}
+
+BIGNUM *rsa_encrypt(const BIGNUM *message, const BIGNUM *e, const BIGNUM *modulus) {
+    BIGNUM *out = BN_new();
+    BN_CTX *ctx = BN_CTX_new();
+    BN_mod_exp(out, message, e, modulus, ctx);
+    BN_CTX_free(ctx);
+    return out;
+}
+
+BIGNUM *rsa_decrypt(const BIGNUM *message, const BIGNUM *d, const BIGNUM *modulus) {
+    return rsa_encrypt(message, d, modulus);
 }

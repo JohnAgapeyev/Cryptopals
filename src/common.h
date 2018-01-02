@@ -5,6 +5,12 @@
 #include <stdbool.h>
 #include <openssl/bn.h>
 
+typedef struct {
+    BIGNUM *public;
+    BIGNUM *private;
+    BIGNUM *modulus;
+} RSA_Keypair;
+
 void *checked_malloc(const size_t len);
 void *checked_calloc(const size_t nmemb, const size_t size);
 void *checked_realloc(void *ptr, const size_t len);
@@ -32,5 +38,10 @@ unsigned char *sha1_hash(const unsigned char *mesg, const size_t len);
 unsigned char *sha256_hash(const unsigned char *mesg, const size_t len);
 unsigned char *hmac_sha256(const unsigned char *mesg, const size_t mesg_len, const unsigned char *key, const size_t key_len);
 BIGNUM *hex_to_bignum(const char *str);
+
+const RSA_Keypair *generate_rsa_keys(const BIGNUM *exponent, const unsigned long bits);
+void rsa_keypair_free(const RSA_Keypair *key_pair);
+BIGNUM *rsa_encrypt(const BIGNUM *message, const BIGNUM *e, const BIGNUM *modulus);
+BIGNUM *rsa_decrypt(const BIGNUM *message, const BIGNUM *d, const BIGNUM *modulus);
 
 #endif
