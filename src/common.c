@@ -507,3 +507,134 @@ BIGNUM *rsa_encrypt(const BIGNUM *message, const BIGNUM *e, const BIGNUM *modulu
 BIGNUM *rsa_decrypt(const BIGNUM *message, const BIGNUM *d, const BIGNUM *modulus) {
     return rsa_encrypt(message, d, modulus);
 }
+
+const DSA_Keypair *generate_dsa_keys(const BIGNUM *p, const BIGNUM *q, const BIGNUM *g) {
+    DSA_Keypair *keys = checked_malloc(sizeof(DSA_Keypair));
+    keys->private = BN_new();
+    keys->public = BN_new();
+
+    BN_rand_range(keys->private, q);
+    BN_CTX *ctx = BN_CTX_new();
+    BN_mod_exp(keys->public, g, keys->private, p, ctx);
+    BN_CTX_free(ctx);
+
+    return keys;
+}
+
+void dsa_keypair_free(const DSA_Keypair *key_pair) {
+    BN_clear_free(key_pair->private);
+    BN_clear_free(key_pair->public);
+    free((void *) key_pair);
+}
+
+const DSA_Signature *dsa_sign(const unsigned char *message, const size_t len, const BIGNUM *p, const BIGNUM *q, const BIGNUM *g, const DSA_Keypair *key_pair) {
+    BIGNUM *zero = BN_new();
+    BN_zero(zero);
+    BIGNUM *k = BN_new();
+    BIGNUM *r = BN_new();
+    BIGNUM *s = BN_new();
+    BN_CTX *ctx = BN_CTX_new();
+    unsigned char *hash = sha1_hash(message, len);
+    unsigned char *hex_str = hex_encode(hash, 20);
+    BIGNUM *bn_hash = hex_to_bignum((const char *) hex_str);
+new_k:
+    BN_rand_range(k, q);
+    if (BN_cmp(k, zero) == 0) {
+        goto new_k;
+    }
+    BN_mod_exp(r, g, k, p, ctx);
+    BN_mod(r, r, q, ctx);
+    if (BN_cmp(r, zero) == 0) {
+        goto new_k;
+    }
+
+    BN_mod_mul(s, key_pair->private, r, q, ctx);
+    BN_mod_add(s, s, bn_hash, q, ctx);
+
+    BIGNUM *k_inverse = BN_mod_inverse(NULL, k, q, ctx);
+    BN_mod_mul(s, s, k_inverse, q, ctx);
+
+    if (BN_cmp(s, zero) == 0) {
+        BN_free(k_inverse);
+        goto new_k;
+    }
+
+    DSA_Signature *out = checked_malloc(sizeof(DSA_Signature));
+    out->r = r;
+    out->s = s;
+
+    BN_free(zero);
+    BN_free(k);
+    BN_CTX_free(ctx);
+    free(hash);
+    free(hex_str);
+    BN_free(bn_hash);
+    BN_free(k_inverse);
+
+    return out;
+}
+
+bool dsa_verify(const unsigned char *message, const size_t len, const DSA_Signature *signature, const BIGNUM *p, const BIGNUM *q, const BIGNUM *g) {
+    BIGNUM *zero = BN_new();
+    BN_zero(zero);
+
+    if (BN_cmp(signature->r, zero) != 1) {
+        BN_free(zero);
+        return false;
+    }
+    if (BN_cmp(signature->r, q) != -1) {
+        BN_free(zero);
+        return false;
+    }
+    if (BN_cmp(signature->s, zero) != 1) {
+        BN_free(zero);
+        return false;
+    }
+    if (BN_cmp(signature->s, q) != -1) {
+        BN_free(zero);
+        return false;
+    }
+
+    BN_CTX *ctx = BN_CTX_new();
+
+    BIGNUM *w = BN_mod_inverse(NULL, signature->s, q, ctx);
+
+    unsigned char *hash = sha1_hash(message, len);
+    unsigned char *hex_str = hex_encode(hash, 20);
+    BIGNUM *bn_hash = hex_to_bignum((const char *) hex_str);
+
+    BIGNUM *u_1 = BN_new();
+    BN_mod_mul(u_1, bn_hash, w, q, ctx);
+
+    BIGNUM *u_2 = BN_new();
+    BN_mod_mul(u_2, signature->r, w, q, ctx);
+
+    BIGNUM *term_1 = BN_new();
+    BN_mod_exp(term_1, g, u_1, p, ctx);
+
+    BIGNUM *term_2 = BN_new();
+    BN_mod_exp(term_2, g, u_2, p, ctx);
+
+    BIGNUM *v = BN_new();
+    BN_mod_mul(v, term_1, term_2, p, ctx);
+    BN_mod(v, v, q, ctx);
+
+    BN_free(zero);
+    BN_CTX_free(ctx);
+    BN_free(w);
+    BN_free(bn_hash);
+    BN_free(u_1);
+    BN_free(u_2);
+    BN_free(term_1);
+    BN_free(term_2);
+    free(hash);
+    free(hex_str);
+
+    if (BN_cmp(v, signature->r) == 0) {
+        BN_free(v);
+        return true;
+    } else {
+        BN_free(v);
+        return false;
+    }
+}

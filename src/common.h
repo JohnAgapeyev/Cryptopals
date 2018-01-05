@@ -11,6 +11,16 @@ typedef struct {
     BIGNUM *modulus;
 } RSA_Keypair;
 
+typedef struct {
+    BIGNUM *public;
+    BIGNUM *private;
+} DSA_Keypair;
+
+typedef struct {
+    BIGNUM *r;
+    BIGNUM *s;
+} DSA_Signature;
+
 void *checked_malloc(const size_t len);
 void *checked_calloc(const size_t nmemb, const size_t size);
 void *checked_realloc(void *ptr, const size_t len);
@@ -43,5 +53,10 @@ const RSA_Keypair *generate_rsa_keys(const BIGNUM *exponent, const unsigned long
 void rsa_keypair_free(const RSA_Keypair *key_pair);
 BIGNUM *rsa_encrypt(const BIGNUM *message, const BIGNUM *e, const BIGNUM *modulus);
 BIGNUM *rsa_decrypt(const BIGNUM *message, const BIGNUM *d, const BIGNUM *modulus);
+
+const DSA_Keypair *generate_dsa_keys(const BIGNUM *p, const BIGNUM *q, const BIGNUM *g);
+void dsa_keypair_free(const DSA_Keypair *key_pair);
+const DSA_Signature *dsa_sign(const unsigned char *message, const size_t len, const BIGNUM *p, const BIGNUM *q, const BIGNUM *g, const DSA_Keypair *key_pair);
+bool dsa_verify(const unsigned char *message, const size_t len, const DSA_Signature *signature, const BIGNUM *p, const BIGNUM *q, const BIGNUM *g);
 
 #endif
