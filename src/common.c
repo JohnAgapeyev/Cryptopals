@@ -448,8 +448,8 @@ const RSA_Keypair *generate_rsa_keys(const BIGNUM *exponent, const unsigned long
     BIGNUM *p = BN_new();
     BIGNUM *q = BN_new();
 
-    BN_generate_prime_ex(p, bits / 2, 0, NULL, NULL, NULL);
-    BN_generate_prime_ex(q, bits / 2, 0, NULL, NULL, NULL);
+    BN_generate_prime_ex(p, bits / 2, 1, NULL, NULL, NULL);
+    BN_generate_prime_ex(q, bits / 2, 1, NULL, NULL, NULL);
 
     BIGNUM *one = BN_new();
     BN_one(one);
