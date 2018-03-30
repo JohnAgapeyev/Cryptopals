@@ -11,13 +11,34 @@ bool parity_oracle(BIGNUM *ciphertext, const RSA_Keypair *keys) {
     return !rtn;
 }
 
-void decrypt_message(const BIGNUM *ciphertext, BIGNUM *lower, BIGNUM *upper) {
-    long counter = 0;
-    BN_CTX *ctx = BN_CTX_new();
-    while (BN_cmp(lower, upper) < 0) {
+void decrypt_message(const BIGNUM *ciphertext, const RSA_Keypair *keys) {
+    const char *e_str = "65537";
+    BIGNUM *e = hex_to_bignum(e_str);
 
+    BN_CTX *ctx = BN_CTX_new();
+    BIGNUM *value = BN_new();
+    BN_set_word(value, 2);
+    BIGNUM *lower_bound = BN_new();
+    BIGNUM *upper_bound = BN_dup(keys->modulus);
+    BN_zero(lower_bound);
+    BIGNUM *modified = BN_dup(ciphertext);
+    BIGNUM *temp = BN_new();
+    while (BN_cmp(lower_bound, upper_bound) < 0) {
+        BN_mod_exp(temp, value, e, modulus, ctx);
+        BN_mod_mul(modified, modified, temp, modulus, ctx);
+
+        if (parity_oracle(modified)) {
+
+        } else {
+
+        }
+
+        BN_lshift1(value, value);
+        BN_copy(modified, ciphertext);
     }
     BN_CTX_free(ctx);
+    BN_free(value);
+    BN_free(e);
 }
 
 int main(void) {
