@@ -23,7 +23,7 @@ void free_globals(void) {
     BN_free(g);
 }
 
-DSA_Signature *bad_dsa_sign(const unsigned char *message, const size_t len, const BIGNUM *p, const BIGNUM *q, const BIGNUM *g, const BIGNUM * const y) {
+DSA_Signature *bad_dsa_sign(const unsigned char *message, const size_t len, const BIGNUM *p, const BIGNUM *q, const BIGNUM *y) {
     BN_CTX *ctx = BN_CTX_new();
     unsigned char *hash = sha1_hash(message, len);
     unsigned char *hex_str = hex_encode(hash, 20);
@@ -31,14 +31,16 @@ DSA_Signature *bad_dsa_sign(const unsigned char *message, const size_t len, cons
 
     BIGNUM *z = BN_new();
     //Arbitrary number
-    BN_set_word(z, 37);
+    BN_set_word(z, 3700);
     BIGNUM *z_inverse = BN_mod_inverse(NULL, z, q, ctx);
 
     DSA_Signature *out = checked_malloc(sizeof(DSA_Signature));
+    out->r = BN_new();
+    out->s = BN_new();
 
     //r = (y ** z mod p) mod q
     BN_mod_exp(out->r, y, z, p, ctx);
-    BN_nnmod(out->r, out->r, q, ctx);
+    BN_mod(out->r, out->r, q, ctx);
 
     BN_mod_mul(out->s, out->r, z_inverse, q, ctx);
 
@@ -64,38 +66,32 @@ DSA_Signature *bad_dsa_sign(const unsigned char *message, const size_t len, cons
  * a learning experience.
  */
 int main(void) {
-    const char *message_1 = "Hello, world";
-    const char *message_2 = "Goodbye, world";
+    const unsigned char *message_1 = (const unsigned char *) "Hello, world";
+    const unsigned char *message_2 = (const unsigned char *) "Goodbye, world";
     init_globals();
 
     BN_add(g, p, BN_value_one());
 
     const DSA_Keypair *keys = generate_dsa_keys(p, q, g);
-    printf("Keys generated\n");
 
-    const DSA_Signature *sig = dsa_sign(message_1, strlen(message_1), p, q, g, keys);
-    printf("Message signed\n");
+    const DSA_Signature *sig = dsa_sign(message_1, strlen((char *) message_1), p, q, g, keys);
 
-    const DSA_Signature *bad_sig = dsa_sign(message_2, strlen(message_2), p, q, g, keys->public);
+    const DSA_Signature *bad_sig = bad_dsa_sign(message_2, strlen((char *) message_2), p, q, keys->public);
 
-    if (!dsa_verify(message_1, strlen(message_1), sig, p, q, g)) {
-        fprintf(stderr, "Failed to verify standard signature\n");
-        free((DSA_Signature *) sig);
+    if (!dsa_verify(message_1, strlen((char *) message_1), sig, p, q, g)) {
+        printf("Set 6 Challenge 44 FAILED Unable to verify standard signature\n");
         goto cleanup;
     }
-    free((DSA_Signature *) sig);
-    printf("Message 1 verified\n");
-
-    sig = dsa_sign(message_2, strlen(message_2), p, q, g, keys);
-    if (!dsa_verify(message_2, strlen(message_2), sig, p, q, g)) {
-        fprintf(stderr, "Failed to verify demo signature\n");
-        free((DSA_Signature *) sig);
+    if (!dsa_verify(message_2, strlen((char *) message_2), bad_sig, p, q, g)) {
+        printf("Set 6 Challenge 44 FAILED Unable to verify forged signature\n");
         goto cleanup;
     }
 
-    printf("Both signatures verified\n");
+    printf("Set 6 Challenge 45 PASSED Valid and forged signatures both verified correctly\n");
 
 cleanup:
+    free((DSA_Signature *) sig);
+    free((DSA_Signature *) bad_sig);
     dsa_keypair_free(keys);
     free_globals();
     return EXIT_SUCCESS;
