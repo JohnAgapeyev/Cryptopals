@@ -10,6 +10,11 @@ BIGNUM *B_2;
 BIGNUM *B_3;
 BIGNUM *e;
 
+struct range {
+    BIGNUM *a;
+    BIGNUM *b;
+};
+
 bool oracle(BIGNUM *ciphertext, const RSA_Keypair *keys) {
     BIGNUM *plaintext = rsa_decrypt(ciphertext, keys->private, keys->modulus);
 
@@ -99,6 +104,62 @@ void free_constants(void) {
     BN_free(B_3);
 }
 
+struct range *get_range_from_s(const BIGNUM *s, const BIGNUM *n, const struct range *prev) {
+    struct range *m = checked_malloc(sizeof(struct range));
+    m->a = BN_new();
+    m->b = BN_new();
+
+    BIGNUM *calculated_r = BN_new();
+    BIGNUM *tmp = BN_new();
+    BN_CTX *ctx = BN_CTX_new();
+
+    //calculated r = ((prev->a * s) - 3B + 1) / n
+    BN_mul(calculated_r, prev->a, s, ctx);
+    BN_sub(calculated_r, calculated_r, B_3);
+    BN_add_word(calculated_r, 1);
+    BN_div(calculated_r, NULL, calculated_r, n, ctx);
+
+    //tmp = ((prev->b * s) - B2) / n
+    BN_mul(tmp, prev->b, s, ctx);
+    BN_sub(tmp, tmp, B_2);
+    BN_div(tmp, NULL, tmp, n, ctx);
+
+    //Average the results to get middle result for r
+    BN_add(calculated_r, calculated_r, tmp);
+    BN_div_word(calculated_r, 2);
+
+    //tmp = (2B + rn) / s
+    BN_mul(tmp, calculated_r, n, ctx);
+    BN_add(tmp, tmp, B_2);
+    BN_div(tmp, NULL, tmp, s, ctx);
+
+    //m->a = max(prev->a, (2B + rn) / s)
+    if (BN_cmp(prev->a, tmp) == 1) {
+        BN_copy(m->a, prev->a);
+    } else {
+        BN_copy(m->a, tmp);
+    }
+
+    //tmp = (3B -1 + rn) / s
+    BN_mul(tmp, calculated_r, n, ctx);
+    BN_add(tmp, tmp, B_3);
+    BN_sub_word(tmp, 1);
+    BN_div(tmp, NULL, tmp, s, ctx);
+
+    //m->b = min(prev->b, (3B - 1 + rn) / s)
+    if (BN_cmp(prev->a, tmp) == -1) {
+        BN_copy(m->b, prev->b);
+    } else {
+        BN_copy(m->b, tmp);
+    }
+
+    BN_free(calculated_r);
+    BN_free(tmp);
+    BN_CTX_free(ctx);
+
+    return m;
+}
+
 BIGNUM *generate_initial_s(BIGNUM *ciphertext, const RSA_Keypair *keys) {
     BN_CTX *ctx = BN_CTX_new();
     BIGNUM *test = BN_new();
@@ -136,6 +197,13 @@ int main(void) {
 
     BIGNUM *s1 = generate_initial_s(padded, key_pair);
     printf("Initial s value: %s\n", BN_bn2hex(s1));
+
+    struct range start;
+    start.a = B_2;
+    start.b = B_3;
+
+    struct range *ran = get_range_from_s(s1, key_pair->modulus, &start);
+    printf("Initial range: %s\t%s\n", BN_bn2hex(ran->a), BN_bn2hex(ran->b));
 
 cleanup:
     rsa_keypair_free(key_pair);
