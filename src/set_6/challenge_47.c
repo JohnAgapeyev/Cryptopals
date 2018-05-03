@@ -84,10 +84,20 @@ void generate_constants(void) {
     e = hex_to_bignum(e_str);
 
     BIGNUM *B = BN_new();
-    BN_set_word(B, 1);
+    BN_set_word(B, 2);
+
+    BN_CTX *ctx = BN_CTX_new();
+
+    //BIGNUM *tmp = BN_new();
+    //BN_set_word(tmp, 8 * ((256 + 7) / 8));
+    //BN_set_word(tmp, 8 * (32 - 2));
+    //BN_exp(B, B, tmp, ctx);
+
+    //BN_CTX_free(ctx);
+    //BN_free(tmp);
 
     //B = 2^8(k-2) where k is modulus num bytes
-    BN_lshift(B, B, 8 * (32 - 2));
+    BN_lshift(B, B, 8 * (32 - 2) - 1);
 
     B_2 = BN_dup(B);
     B_3 = BN_dup(B);
@@ -132,6 +142,10 @@ struct range *get_range_from_s(const BIGNUM *s, const BIGNUM *n, const struct ra
     BN_mul(tmp, calculated_r, n, ctx);
     BN_add(tmp, tmp, B_2);
     BN_div(tmp, NULL, tmp, s, ctx);
+    BN_add_word(tmp, 1);
+
+    printf("%s\n", BN_bn2hex(tmp));
+    printf("%d\n", BN_num_bytes(tmp));
 
     //m->a = max(prev->a, (2B + rn) / s)
     if (BN_cmp(prev->a, tmp) == 1) {
@@ -145,6 +159,7 @@ struct range *get_range_from_s(const BIGNUM *s, const BIGNUM *n, const struct ra
     BN_add(tmp, tmp, B_3);
     BN_sub_word(tmp, 1);
     BN_div(tmp, NULL, tmp, s, ctx);
+    BN_add_word(tmp, 1);
 
     //m->b = min(prev->b, (3B - 1 + rn) / s)
     if (BN_cmp(prev->a, tmp) == -1) {
@@ -182,6 +197,63 @@ BIGNUM *generate_initial_s(BIGNUM *ciphertext, const RSA_Keypair *keys) {
     return test;
 }
 
+BIGNUM *generate_new_s(BIGNUM *ciphertext, const RSA_Keypair *keys, const struct range *range, const BIGNUM *s) {
+    BN_CTX *ctx = BN_CTX_new();
+    BIGNUM *new_s = BN_new();
+    BIGNUM *r = BN_new();
+    BIGNUM *max = BN_new();
+
+    //r = 2 * (((b * s) - 2B) / n)
+    BN_mul(r, range->b, s, ctx);
+    //printf("Bytes: %d\n", BN_num_bytes(r));
+    //printf("R1: %s\n", BN_bn2hex(r));
+    //printf("B : %s\n", BN_bn2hex(range->b));
+    BN_sub(r, r, B_2);
+    //printf("R2: %s\n", BN_bn2hex(r));
+    //printf("Bytes: %d\n", BN_num_bytes(r));
+    //printf("Bytes: %d\n", BN_num_bytes(keys->modulus));
+    BN_div(r, NULL, r, keys->modulus, ctx);
+    //printf("Mo: %s\n", BN_bn2hex(keys->modulus));
+    //printf("R3: %s\n", BN_bn2hex(r));
+    BN_mul_word(r, 2);
+    //printf("R4: %s\n", BN_bn2hex(r));
+
+    for (;;BN_add_word(r, 1)) {
+        //new_s = (2B + (r * n)) / b
+        BN_mul(new_s, r, keys->modulus, ctx);
+        BN_add(new_s, new_s, B_2);
+        BN_div(new_s, NULL, new_s, range->b, ctx);
+
+        //max = (3B + (r * n)) / a
+        BN_mul(max, r, keys->modulus, ctx);
+        BN_add(max, max, B_3);
+        BN_div(max, NULL, max, range->a, ctx);
+
+        //printf("A %s\na %s\n", BN_bn2hex(B_3), BN_bn2hex(range->a));
+        //printf("B %s\nb %s\n", BN_bn2hex(B_2), BN_bn2hex(range->b));
+
+        //printf("x %s\nx %s\n\n", BN_bn2hex(new_s), BN_bn2hex(max));
+
+        for (; BN_cmp(new_s, max) == -1; BN_add_word(new_s, 1)) {
+            BIGNUM *output = rsa_encrypt(new_s, keys->public, keys->modulus);
+            BN_mod_mul(output, output, ciphertext, keys->modulus, ctx);
+
+            if (oracle(output, keys)) {
+                BN_free(output);
+                //Value is padded correctly
+                goto done;
+            }
+            BN_free(output);
+        }
+    }
+
+done:
+    BN_CTX_free(ctx);
+    BN_free(r);
+    BN_free(max);
+    return new_s;
+}
+
 int main(void) {
     generate_constants();
 
@@ -204,6 +276,26 @@ int main(void) {
 
     struct range *ran = get_range_from_s(s1, key_pair->modulus, &start);
     printf("Initial range: %s\t%s\n", BN_bn2hex(ran->a), BN_bn2hex(ran->b));
+
+    if (BN_cmp(ran->a, ran->b) == 1) {
+        printf("%s\n%s\n", BN_bn2hex(ran->a), BN_bn2hex(ran->b));
+        abort();
+    }
+
+    BIGNUM *s = generate_new_s(padded, key_pair, ran, s1);
+    printf("New s value: %s\n", BN_bn2hex(s));
+
+    ran = get_range_from_s(s, key_pair->modulus, ran);
+    printf("Again range: %s\t%s\n", BN_bn2hex(ran->a), BN_bn2hex(ran->b));
+
+    s = generate_new_s(padded, key_pair, ran, s);
+    printf("Again s value: %s\n", BN_bn2hex(s));
+
+    ran = get_range_from_s(s, key_pair->modulus, ran);
+    printf("Again range: %s\t%s\n", BN_bn2hex(ran->a), BN_bn2hex(ran->b));
+
+    s = generate_new_s(padded, key_pair, ran, s);
+    printf("Again s value: %s\n", BN_bn2hex(s));
 
 cleanup:
     rsa_keypair_free(key_pair);
