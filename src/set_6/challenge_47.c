@@ -6,14 +6,17 @@
 #include <openssl/rand.h>
 #include "../common.h"
 
-BIGNUM *B_2;
-BIGNUM *B_3;
-BIGNUM *e;
-
 struct range {
     BIGNUM *a;
     BIGNUM *b;
 };
+
+BIGNUM *B_2;
+BIGNUM *B_3;
+
+struct range **range_list;
+size_t range_count = 0;
+size_t range_allocated = 0;
 
 bool oracle(BIGNUM *ciphertext, const RSA_Keypair *keys) {
     BIGNUM *plaintext = rsa_decrypt(ciphertext, keys->private, keys->modulus);
@@ -81,9 +84,7 @@ BIGNUM *pkcs1v15_pad(const char *mesg, const size_t len, const RSA_Keypair *key_
     return ciphertext;
 }
 
-void generate_constants(void) {
-    const char *e_str = "65537";
-    e = hex_to_bignum(e_str);
+void generate_constants(const BIGNUM *n) {
 
     BIGNUM *B = BN_new();
     BN_set_word(B, 2);
@@ -99,7 +100,7 @@ void generate_constants(void) {
     //BN_free(tmp);
 
     //B = 2^8(k-2) where k is modulus num bytes
-    BN_lshift(B, B, 8 * (32 - 2) - 1);
+    BN_lshift(B, B, 8 * (BN_num_bytes(n) - 2) - 1);
 
     B_2 = BN_dup(B);
     B_3 = BN_dup(B);
@@ -108,82 +109,138 @@ void generate_constants(void) {
     BN_mul_word(B_3, 3);
 
     BN_free(B);
+
+    range_list = checked_calloc(100, sizeof(struct range *));
+    range_allocated = 100;
 }
 
 void free_constants(void) {
-    BN_free(e);
     BN_free(B_2);
     BN_free(B_3);
+
+    for (unsigned int i = 0; i < range_allocated; ++i) {
+        if (range_list[i]) {
+            BN_free(range_list[i]->a);
+            BN_free(range_list[i]->b);
+            free(range_list[i]);
+        }
+    }
+
+    free(range_list);
 }
 
-struct range *get_range_from_s(const BIGNUM *s, const BIGNUM *n, const struct range *prev) {
-    struct range *m = checked_malloc(sizeof(struct range));
-    m->a = BN_new();
-    m->b = BN_new();
-
+void get_range_from_s(const BIGNUM *s, const BIGNUM *n) {
     BIGNUM *calculated_r = BN_new();
     BIGNUM *tmp = BN_new();
+    BIGNUM *max_r = BN_new();
     BN_CTX *ctx = BN_CTX_new();
 
-    //calculated r = ((prev->a * s) - 3B + 1) / n
-    BN_mul(calculated_r, prev->a, s, ctx);
-    BN_sub(calculated_r, calculated_r, B_3);
-    BN_add_word(calculated_r, 1);
-    BN_div(calculated_r, NULL, calculated_r, n, ctx);
+    struct range **new_range_list = checked_calloc(1000, sizeof(struct range *));
+    size_t new_range_count = 0;
+    size_t new_range_allocated = 1000;
 
-    printf("R testing: %s\n", BN_bn2hex(calculated_r));
+    for (unsigned int i = 0; i < range_count; ++i) {
+        struct range *elem = range_list[i];
 
-    //tmp = ((prev->b * s) - B2) / n
-    BN_mul(tmp, prev->b, s, ctx);
-    BN_sub(tmp, tmp, B_2);
-    BN_div(tmp, NULL, tmp, n, ctx);
+        //calculated r = ((elem->a * s) - 3B + 1) / n
+        BN_mul(calculated_r, elem->a, s, ctx);
+        BN_sub(calculated_r, calculated_r, B_3);
+        BN_add_word(calculated_r, 1);
+        printf("R testing: %s\n", BN_bn2hex(calculated_r));
+        BN_div(calculated_r, NULL, calculated_r, n, ctx);
 
-    printf("R2testing: %s\n", BN_bn2hex(tmp));
+        printf("R testing: %s\n", BN_bn2hex(n));
 
-    //Average the results to get middle result for r
-    BN_add(calculated_r, calculated_r, tmp);
-    BN_div_word(calculated_r, 2);
-    //They use ceil, I just add 1 to emulate it, also prevents zero for r
-    BN_add_word(calculated_r, 1);
+        //max_r = ((elem->b * s) - B2) / n
+        BN_mul(max_r, elem->b, s, ctx);
+        BN_sub(max_r, max_r, B_2);
+        BN_div(max_r, NULL, max_r, n, ctx);
 
-    printf("R result: %s\n", BN_bn2hex(calculated_r));
+        printf("R2testing: %s\n", BN_bn2hex(max_r));
 
-    //tmp = (2B + rn) / s
-    BN_mul(tmp, calculated_r, n, ctx);
-    BN_add(tmp, tmp, B_2);
-    BN_div(tmp, NULL, tmp, s, ctx);
-    BN_add_word(tmp, 1);
+        for (; BN_cmp(calculated_r, max_r) != 1; BN_add_word(calculated_r, 1)) {
+            if (new_range_count == new_range_allocated) {
+                new_range_list = checked_realloc(new_range_list, (new_range_allocated + 100) * sizeof(struct range *));
+                new_range_allocated += 100;
+            }
+            struct range *m = checked_malloc(sizeof(struct range));
+            new_range_list[new_range_count++] = m;
 
-    printf("Range testing a: %s\n", BN_bn2hex(tmp));
+            m->a = BN_new();
+            m->b = BN_new();
 
-    //m->a = max(prev->a, (2B + rn) / s)
-    if (BN_cmp(prev->a, tmp) == 1) {
-        BN_copy(m->a, prev->a);
-    } else {
-        BN_copy(m->a, tmp);
+            printf("R result: %s\n", BN_bn2hex(calculated_r));
+
+            //tmp = (2B + rn) / s
+            BN_mul(tmp, calculated_r, n, ctx);
+            BN_add(tmp, tmp, B_2);
+            BN_div(tmp, NULL, tmp, s, ctx);
+            BN_add_word(tmp, 1);
+
+            printf("Range testing a: %s\n", BN_bn2hex(tmp));
+
+            //m->a = max(elem->a, (2B + rn) / s)
+            if (BN_cmp(elem->a, tmp) == 1) {
+                BN_copy(m->a, elem->a);
+            } else {
+                BN_copy(m->a, tmp);
+            }
+
+            //tmp = (3B - 1 + rn) / s
+            BN_mul(tmp, calculated_r, n, ctx);
+            BN_add(tmp, tmp, B_3);
+            BN_sub_word(tmp, 1);
+            BN_div(tmp, NULL, tmp, s, ctx);
+            BN_add_word(tmp, 1);
+
+            printf("Range testing b: %s\n", BN_bn2hex(tmp));
+
+            //m->b = min(elem->b, (3B - 1 + rn) / s)
+            if (BN_cmp(elem->b, tmp) == -1) {
+                BN_copy(m->b, elem->b);
+            } else {
+                BN_copy(m->b, tmp);
+            }
+
+            //Range is invalid; remove it
+            if (BN_cmp(m->a, B_3) == 1 || BN_cmp(m->b, B_2) == -1 || BN_cmp(m->a, m->b) == 1) {
+                printf("Invalid range a: %s\n", BN_bn2hex(m->a));
+                printf("Invalid range b: %s\n", BN_bn2hex(m->b));
+
+                BN_free(m->a);
+                BN_free(m->b);
+                free(m);
+                --new_range_count;
+                new_range_list[new_range_count] = NULL;
+            }
+        }
     }
 
-    //tmp = (3B -1 + rn) / s
-    BN_mul(tmp, calculated_r, n, ctx);
-    BN_add(tmp, tmp, B_3);
-    BN_sub_word(tmp, 1);
-    BN_div(tmp, NULL, tmp, s, ctx);
-    BN_add_word(tmp, 1);
-
-    printf("Range testing b: %s\n", BN_bn2hex(tmp));
-
-    //m->b = min(prev->b, (3B - 1 + rn) / s)
-    if (BN_cmp(prev->b, tmp) == -1) {
-        BN_copy(m->b, prev->b);
-    } else {
-        BN_copy(m->b, tmp);
+    if (new_range_count == 1) {
+        int x = 0;
+        x += 7;
+        printf("%d\n", x);
     }
+
+    //Free old range list
+    for (unsigned int i = 0; i < range_allocated; ++i) {
+        if (range_list[i]) {
+            BN_free(range_list[i]->a);
+            BN_free(range_list[i]->b);
+            free(range_list[i]);
+        }
+    }
+    free(range_list);
+
+    //Assign new ranges
+    range_list = new_range_list;
+    range_count = new_range_count;
+    range_allocated = new_range_allocated;
 
     BN_free(calculated_r);
+    BN_free(max_r);
     BN_free(tmp);
     BN_CTX_free(ctx);
-
-    return m;
 }
 
 BIGNUM *generate_initial_s(BIGNUM *ciphertext, const RSA_Keypair *keys) {
@@ -191,6 +248,29 @@ BIGNUM *generate_initial_s(BIGNUM *ciphertext, const RSA_Keypair *keys) {
     BIGNUM *test = BN_new();
 
     BN_div(test, NULL, keys->modulus, B_3, ctx);
+
+    for (;;) {
+        BIGNUM *output = rsa_encrypt(test, keys->public, keys->modulus);
+        BN_mod_mul(output, output, ciphertext, keys->modulus, ctx);
+
+        if (oracle(output, keys)) {
+            BN_free(output);
+            //Value is padded correctly
+            break;
+        }
+        BN_free(output);
+        BN_add_word(test, 1);
+    }
+    BN_CTX_free(ctx);
+    return test;
+}
+
+BIGNUM *generate_next_s(BIGNUM *ciphertext, const RSA_Keypair *keys, const BIGNUM *old_s) {
+    BN_CTX *ctx = BN_CTX_new();
+    BIGNUM *test = BN_new();
+
+    BN_copy(test, old_s);
+    BN_add_word(test, 1);
 
     for (;;) {
         BIGNUM *output = rsa_encrypt(test, keys->public, keys->modulus);
@@ -247,6 +327,7 @@ BIGNUM *generate_new_s(BIGNUM *ciphertext, const RSA_Keypair *keys, const struct
 
         if (BN_cmp(new_s, max) > -1) {
             printf("New S range mismatch\n");
+            printf("%s\n%s\n", BN_bn2hex(new_s), BN_bn2hex(max));
             abort();
         }
 
@@ -271,9 +352,11 @@ done:
 }
 
 int main(void) {
-    generate_constants();
-
+    const char *e_str = "65537";
+    BIGNUM *e = hex_to_bignum(e_str);
     const RSA_Keypair *key_pair = generate_rsa_keys(e, 256);
+
+    generate_constants(key_pair->modulus);
 
     const char *message = "kick it, CC";
     BIGNUM *padded = pkcs1v15_pad(message, strlen(message), key_pair);
@@ -282,61 +365,60 @@ int main(void) {
         fprintf(stderr, "Padded test did not work\n");
         goto cleanup;
     }
-
-    BIGNUM *s1 = generate_initial_s(padded, key_pair);
-    printf("Initial s value: %s\n", BN_bn2hex(s1));
-
-    struct range start;
-    start.a = B_2;
-    start.b = B_3;
-
-    struct range *ran = get_range_from_s(s1, key_pair->modulus, &start);
-    printf("Initial range: %s\t%s\n", BN_bn2hex(ran->a), BN_bn2hex(ran->b));
-
-    if (BN_cmp(ran->a, ran->b) == 1) {
-        fprintf(stderr, "Function Range Mismatch\n");
-        fprintf(stderr, "%s\n%s\n", BN_bn2hex(ran->a), BN_bn2hex(ran->b));
-        abort();
-    }
-
-    struct range *new_range = ran;
-    struct range *tmp;
-    BIGNUM *s = s1;
+    BIGNUM *s;
     BIGNUM *tmp_num;
+    uint64_t i = 1;
     for (;;) {
-        tmp_num = generate_new_s(padded, key_pair, new_range, s);
-        BN_free(s);
-        s = tmp_num;
+        if (i == 1) {
+            s = generate_initial_s(padded, key_pair);
+            printf("Initial s value: %s\n", BN_bn2hex(s));
 
-        printf("New s value: %s\n", BN_bn2hex(s));
+            struct range *start = checked_malloc(sizeof(struct range));
+            start->a = BN_dup(B_2);
+            start->b = BN_dup(B_3);
 
-        tmp = get_range_from_s(s, key_pair->modulus, new_range);
-        //Free the old range, then assign the new one to the same pointer
-        BN_free(new_range->a);
-        BN_free(new_range->b);
-        free(new_range);
-
-        new_range = tmp;
-
-        if (BN_cmp(new_range->a, new_range->b) == 1) {
-            fprintf(stderr, "Function Range Mismatch\n");
-            fprintf(stderr, "%s\n%s\n", BN_bn2hex(new_range->a), BN_bn2hex(new_range->b));
+            range_list[0] = start;
+            range_count = 1;
+        } else {
+            if (range_count > 1) {
+                printf("Calling NEXT S\n");
+                tmp_num = generate_next_s(padded, key_pair, s);
+                BN_free(s);
+                s = tmp_num;
+            }
+        }
+        if (range_count == 1) {
+            if (BN_cmp(range_list[0]->a, range_list[0]->b) != -1) {
+                fprintf(stderr, "Range mismatch\n");
+                fprintf(stderr, "%s\n%s\n", BN_bn2hex(range_list[0]->a), BN_bn2hex(range_list[0]->b));
+                abort();
+            }
+            printf("Calling new S\n");
+            tmp_num = generate_new_s(padded, key_pair, range_list[0], s);
+            BN_free(s);
+            s = tmp_num;
+        } else {
+            fprintf(stderr, "Range count is zero or negative\n");
             abort();
         }
-
-        printf("Again range: %s\t%s\n", BN_bn2hex(new_range->a), BN_bn2hex(new_range->b));
+        printf("New s value: %s\n", BN_bn2hex(s));
+        get_range_from_s(s, key_pair->modulus);
+        printf("New range count: %d\n", range_count);
 
         //Range is a single number
-        if (BN_cmp(new_range->a, new_range->b) == 0) {
+        if (range_count == 1 && BN_cmp(range_list[0]->a, range_list[0]->b) == 0) {
             printf("End condition found\n");
             break;
         }
+
+        i+= 1;
     }
 
 cleanup:
     rsa_keypair_free(key_pair);
     BN_free(padded);
     free_constants();
+    BN_free(e);
 
     return EXIT_SUCCESS;
 }

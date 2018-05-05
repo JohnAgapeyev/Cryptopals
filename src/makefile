@@ -1,6 +1,6 @@
 CC=gcc
 BASEFLAGS=-Wall -Wextra -std=c11 -pedantic -D_POSIX_C_SOURCE=200809L -pipe
-DEBUGFLAGS=-fsanitize=undefined -ggdb -O0
+DEBUGFLAGS=-fsanitize=undefined -ggdb -Og
 RELEASEFLAGS=-O3 -march=native -flto -DNDEBUG
 CLIBS=-lcrypto -lm
 
