@@ -129,6 +129,8 @@ void free_constants(void) {
     free(range_list);
 }
 
+//INDEPENDENTLY VERIFIED WITH KNOWN GOOD SOLUTION
+//Generates extra ranges/results though, for some odd reason
 void get_range_from_s(const BIGNUM *s, const BIGNUM *n) {
     BIGNUM *calculated_r = BN_new();
     BIGNUM *tmp = BN_new();
@@ -146,17 +148,17 @@ void get_range_from_s(const BIGNUM *s, const BIGNUM *n) {
         BN_mul(calculated_r, elem->a, s, ctx);
         BN_sub(calculated_r, calculated_r, B_3);
         BN_add_word(calculated_r, 1);
-        printf("R testing: %s\n", BN_bn2hex(calculated_r));
+        //printf("R testing: %s\n", BN_bn2hex(calculated_r));
         BN_div(calculated_r, NULL, calculated_r, n, ctx);
 
-        printf("R testing: %s\n", BN_bn2hex(n));
+        //printf("R testing: %s\n", BN_bn2hex(n));
 
         //max_r = ((elem->b * s) - B2) / n
         BN_mul(max_r, elem->b, s, ctx);
         BN_sub(max_r, max_r, B_2);
         BN_div(max_r, NULL, max_r, n, ctx);
 
-        printf("R2testing: %s\n", BN_bn2hex(max_r));
+        //printf("R2testing: %s\n", BN_bn2hex(max_r));
 
         for (; BN_cmp(calculated_r, max_r) != 1; BN_add_word(calculated_r, 1)) {
             if (new_range_count == new_range_allocated) {
@@ -169,7 +171,7 @@ void get_range_from_s(const BIGNUM *s, const BIGNUM *n) {
             m->a = BN_new();
             m->b = BN_new();
 
-            printf("R result: %s\n", BN_bn2hex(calculated_r));
+            //printf("R result: %s\n", BN_bn2hex(calculated_r));
 
             //tmp = (2B + rn) / s
             BN_mul(tmp, calculated_r, n, ctx);
@@ -177,7 +179,7 @@ void get_range_from_s(const BIGNUM *s, const BIGNUM *n) {
             BN_div(tmp, NULL, tmp, s, ctx);
             BN_add_word(tmp, 1);
 
-            printf("Range testing a: %s\n", BN_bn2hex(tmp));
+            //printf("Range testing a: %s\n", BN_bn2hex(tmp));
 
             //m->a = max(elem->a, (2B + rn) / s)
             if (BN_cmp(elem->a, tmp) == 1) {
@@ -191,9 +193,9 @@ void get_range_from_s(const BIGNUM *s, const BIGNUM *n) {
             BN_add(tmp, tmp, B_3);
             BN_sub_word(tmp, 1);
             BN_div(tmp, NULL, tmp, s, ctx);
-            BN_add_word(tmp, 1);
+            //BN_add_word(tmp, 1);
 
-            printf("Range testing b: %s\n", BN_bn2hex(tmp));
+            //printf("Range testing b: %s\n", BN_bn2hex(tmp));
 
             //m->b = min(elem->b, (3B - 1 + rn) / s)
             if (BN_cmp(elem->b, tmp) == -1) {
@@ -204,8 +206,8 @@ void get_range_from_s(const BIGNUM *s, const BIGNUM *n) {
 
             //Range is invalid; remove it
             if (BN_cmp(m->a, B_3) == 1 || BN_cmp(m->b, B_2) == -1 || BN_cmp(m->a, m->b) == 1) {
-                printf("Invalid range a: %s\n", BN_bn2hex(m->a));
-                printf("Invalid range b: %s\n", BN_bn2hex(m->b));
+                //printf("Invalid range a: %s\n", BN_bn2hex(m->a));
+                //printf("Invalid range b: %s\n", BN_bn2hex(m->b));
 
                 BN_free(m->a);
                 BN_free(m->b);
@@ -288,6 +290,7 @@ BIGNUM *generate_next_s(BIGNUM *ciphertext, const RSA_Keypair *keys, const BIGNU
     return test;
 }
 
+//INITIAL R CALCULATION HAS BEEN VERIFIED USING KNOWN GOOD SOURCE CODE
 BIGNUM *generate_new_s(BIGNUM *ciphertext, const RSA_Keypair *keys, const struct range *range, const BIGNUM *s) {
     BN_CTX *ctx = BN_CTX_new();
     BIGNUM *new_s = BN_new();
@@ -305,9 +308,10 @@ BIGNUM *generate_new_s(BIGNUM *ciphertext, const RSA_Keypair *keys, const struct
     //printf("Bytes: %d\n", BN_num_bytes(keys->modulus));
     BN_div(r, NULL, r, keys->modulus, ctx);
     //printf("Mo: %s\n", BN_bn2hex(keys->modulus));
-    //printf("R3: %s\n", BN_bn2hex(r));
     BN_mul_word(r, 2);
+    //printf("R3: %s\n", BN_bn2hex(r));
     //printf("R4: %s\n", BN_bn2hex(r));
+    BN_add_word(r, 1);
 
     for (;;BN_add_word(r, 1)) {
         //new_s = (2B + (r * n)) / b
