@@ -206,8 +206,8 @@ void get_range_from_s(const BIGNUM *s, const BIGNUM *n) {
 
             //Range is invalid; remove it
             if (BN_cmp(m->a, B_3) == 1 || BN_cmp(m->b, B_2) == -1 || BN_cmp(m->a, m->b) == 1) {
-                //printf("Invalid range a: %s\n", BN_bn2hex(m->a));
-                //printf("Invalid range b: %s\n", BN_bn2hex(m->b));
+                printf("Invalid range a: %s\n", BN_bn2hex(m->a));
+                printf("Invalid range b: %s\n", BN_bn2hex(m->b));
 
                 BN_free(m->a);
                 BN_free(m->b);
@@ -369,20 +369,61 @@ int main(void) {
         fprintf(stderr, "Padded test did not work\n");
         goto cleanup;
     }
-    BIGNUM *s;
-    BIGNUM *tmp_num;
+
+    //Get initial S
+    //Compute first new range using default range
+    //while true:
+    //Check new range
+    //Calculate new s based on the new range
+    //Generate new s based on range len
+    //Create new range based on s
+
+
+    //Calculate initial S value
+    BIGNUM *s = generate_initial_s(padded, key_pair);
+    printf("Initial s value: %s\n", BN_bn2hex(s));
+
+    //Create initial range
+    struct range *start = checked_malloc(sizeof(struct range));
+    start->a = BN_dup(B_2);
+    start->b = BN_dup(B_3);
+    BN_sub_word(start->b, 1);
+    range_list[0] = start;
+    range_count = 1;
+
+    get_range_from_s(s, key_pair->modulus);
+
+    for (;;) {
+        //Range is a single number
+        if (range_count == 1 && BN_cmp(range_list[0]->a, range_list[0]->b) == 0) {
+            printf("End condition found\n");
+            goto cleanup;
+        }
+        BIGNUM *tmp_num;
+        if (range_count == 1) {
+            printf("Calling new S\n");
+            tmp_num = generate_new_s(padded, key_pair, range_list[0], s);
+            BN_free(s);
+            s = tmp_num;
+        } else if (range_count > 1) {
+            printf("Calling NEXT S\n");
+            tmp_num = generate_next_s(padded, key_pair, s);
+            BN_free(s);
+            s = tmp_num;
+        } else {
+            fprintf(stderr, "Range count is zero or negative\n");
+            abort();
+        }
+        printf("New s value: %s\n", BN_bn2hex(s));
+        get_range_from_s(s, key_pair->modulus);
+    }
+
+#if 0
     uint64_t i = 1;
     for (;;) {
         if (i == 1) {
             s = generate_initial_s(padded, key_pair);
-            printf("Initial s value: %s\n", BN_bn2hex(s));
 
-            struct range *start = checked_malloc(sizeof(struct range));
-            start->a = BN_dup(B_2);
-            start->b = BN_dup(B_3);
-
-            range_list[0] = start;
-            range_count = 1;
         } else {
             if (range_count > 1) {
                 printf("Calling NEXT S\n");
@@ -417,6 +458,7 @@ int main(void) {
 
         i+= 1;
     }
+#endif
 
 cleanup:
     rsa_keypair_free(key_pair);
