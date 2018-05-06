@@ -21,6 +21,12 @@ size_t range_allocated = 0;
 bool oracle(BIGNUM *ciphertext, const RSA_Keypair *keys) {
     BIGNUM *plaintext = rsa_decrypt(ciphertext, keys->private, keys->modulus);
 
+#if 1
+    if (BN_cmp(plaintext, B_2) != -1 && BN_cmp(plaintext, B_3) == -1) {
+        return true;
+    }
+    return false;
+#else
     unsigned char data[BN_num_bytes(plaintext) + 1];
     BN_bn2binpad(plaintext, data, BN_num_bytes(plaintext) + 1);
 
@@ -33,6 +39,7 @@ bool oracle(BIGNUM *ciphertext, const RSA_Keypair *keys) {
     if (data[1] != 0x02) {
         goto done;
     }
+    printf("%s\n", BN_bn2hex(plaintext));
 
     //Length constraint
     if (BN_num_bytes(plaintext) + 1 < BN_num_bytes(keys->modulus)) {
@@ -53,6 +60,7 @@ bool oracle(BIGNUM *ciphertext, const RSA_Keypair *keys) {
 done:
     BN_free(plaintext);
     return rtn;
+#endif
 }
 
 BIGNUM *pkcs1v15_pad(const char *mesg, const size_t len, const RSA_Keypair *key_pair) {
@@ -142,6 +150,7 @@ void get_range_from_s(const BIGNUM *s, const BIGNUM *n) {
     size_t new_range_allocated = 1000;
 
     for (unsigned int i = 0; i < range_count; ++i) {
+    //unsigned int i = 0; {
         struct range *elem = range_list[i];
 
         //calculated r = ((elem->a * s) - 3B + 1) / n
@@ -313,6 +322,9 @@ BIGNUM *generate_new_s(BIGNUM *ciphertext, const RSA_Keypair *keys, const struct
     //printf("R4: %s\n", BN_bn2hex(r));
     BN_add_word(r, 1);
 
+    printf("Step 2c values:\n");
+    printf("%s\n%s\n%s\n", BN_bn2hex(range->a), BN_bn2hex(range->b), BN_bn2hex(r));
+
     for (;;BN_add_word(r, 1)) {
         //new_s = (2B + (r * n)) / b
         BN_mul(new_s, r, keys->modulus, ctx);
@@ -327,17 +339,22 @@ BIGNUM *generate_new_s(BIGNUM *ciphertext, const RSA_Keypair *keys, const struct
         //printf("A %s\na %s\n", BN_bn2hex(B_3), BN_bn2hex(range->a));
         //printf("B %s\nb %s\n", BN_bn2hex(B_2), BN_bn2hex(range->b));
 
-        //printf("x %s\nx %s\n\n", BN_bn2hex(new_s), BN_bn2hex(max));
+        //printf("ls %s\nus %s\n\n", BN_bn2hex(new_s), BN_bn2hex(max));
 
-        if (BN_cmp(new_s, max) > -1) {
+        if (BN_cmp(new_s, max) == 1) {
             printf("New S range mismatch\n");
             printf("%s\n%s\n", BN_bn2hex(new_s), BN_bn2hex(max));
             abort();
         }
 
-        for (; BN_cmp(new_s, max) == -1; BN_add_word(new_s, 1)) {
+        //printf("Trying r value: %s\n", BN_bn2hex(r));
+
+        for (; BN_cmp(new_s, max) != 1; BN_add_word(new_s, 1)) {
+            //printf("Testing: %s\n", BN_bn2hex(new_s));
             BIGNUM *output = rsa_encrypt(new_s, keys->public, keys->modulus);
             BN_mod_mul(output, output, ciphertext, keys->modulus, ctx);
+
+            //printf("Trying s value: %s\n", BN_bn2hex(new_s));
 
             if (oracle(output, keys)) {
                 BN_free(output);
@@ -356,8 +373,84 @@ done:
 }
 
 int main(void) {
+#if 0
+#if 0
+   const char *n_str = "132612873667943759709952987787418659308186748087820711824488472839444815304296819509183776818588204467977322651020986774824174771971764867542387710283174319821777732898020166199499557511625594292552518432693889774231592909455038338994172291108945975963304244989245844704242208804056234505929094378066006392239";
+    const int s = 43408;
+   const char *range_low = "6110192440562944920489062649997431483266761209184421212243067123131175976916130637009646120827403826454760841014727963088833728854759318091888099997006701191343878554523153391201245176314250380554959417110418400024382081940287633297026697267240885168236747844431631609797140152695039512429603976350766318";
+   const char *range_high = "6110255633108890295635156180409465983926433094466350031033038004097685101932046593434120470897662031886865675201114549341503109593146974107460151509443558978736751003135168572806761850547085248943558771060626453376243393149672181170333349183460250163816044983813733705143503059763711256620606333627098462";
+#else
+   const char *n_str = "132612873667943759709952987787418659308186748087820711824488472839444815304296819509183776818588204467977322651020986774824174771971764867542387710283174319821777732898020166199499557511625594292552518432693889774231592909455038338994172291108945975963304244989245844704242208804056234505929094378066006392239";
+    const int s = 130222;
+   const char *range_low = "6110202025247126844530119201523269056368283108227182836072253144926796916213563581637893951000819855098658822555722216837836875412867656386034844233714458114611709326279904372558107544500555648733238255507553262929341808992982437238976701628082630025925248655281531874299604482840159214105609089997835158";
+   const char *range_high = "6110223089752620515678939124179391628626695950882939667990324254270795841884271141316547193831138604475851667408071811653274147756188534366130001826531794070403739914424383454457727177090278552443919405822174687726208665568499357990343560886727484165226642661104651529617407320072246749789618169298191669";
+#endif
+
+    BIGNUM *n = NULL;
+    BN_dec2bn(&n, n_str);
+
+    BIGNUM *s_old = BN_new();
+    BN_set_word(s_old, s);
+
+    generate_constants(n);
+
+    struct range *start = checked_malloc(sizeof(struct range));
+    start->a = BN_dup(B_2);
+    start->b = BN_dup(B_3);
+
+    range_list[0] = start;
+    range_count = 1;
+
+    get_range_from_s(s_old, n);
+
+    printf("Range count: %d\n", range_count);
+
+    for (int i = 0; i < range_count; ++i) {
+        printf("Got %s\n    %s\nHas %s\n    %s\n", BN_bn2dec(range_list[i]->a), BN_bn2dec(range_list[i]->b), range_low, range_high);
+    }
+#else
     const char *e_str = "65537";
     BIGNUM *e = hex_to_bignum(e_str);
+#if 1
+#if 0
+    const char *p_str = "167230636094866282461211664159158428279902699551992447152002026086321450931356694020366071860452874936312114743689156451204955885905421523426919810372766672329365549589557666294538091910136590569719360771818561583316969574158815755289605442067349031803550793473499645742177046498728201139371344588674279678939";
+    const char *q_str= "153746015991426629737627279764483089360526745536038013938043722107713599542535853191396561623967198520570205780805436781605500829408932188321165836162114053101365153759076284383142329005938490083741368370827739032497065588280706602245858167496933285469691492972704468586486254156236192774677901155398324342253";
+    const char *m_str = "2000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000abcd";
+#else
+    const char *p_str = "313115142601654954062569328755831304743";
+    const char *q_str= "255336707253239299888475776540791782543";
+    const char *m_str = "200000000000000000000000000000000000000000000000000000000abcd";
+#endif
+    BIGNUM *p = NULL;
+    BN_dec2bn(&p, p_str);
+    BIGNUM *q = NULL;
+    BN_dec2bn(&q, q_str);
+    BIGNUM *m = hex_to_bignum(m_str);
+
+    BN_CTX *ctx = BN_CTX_new();
+
+    BIGNUM *n = BN_dup(p);
+    BN_mul(n, n, q, ctx);
+
+    BIGNUM *et = BN_new();
+    BN_sub_word(p, 1);
+    BN_sub_word(q, 1);
+    BN_mul(et, p, q, ctx);
+
+    RSA_Keypair *key_pair = checked_malloc(sizeof(RSA_Keypair));
+    key_pair->modulus = n;
+    key_pair->public = e;
+    key_pair->private = BN_mod_inverse(NULL, e, et, ctx);
+
+    generate_constants(key_pair->modulus);
+
+    BIGNUM *padded = rsa_encrypt(m, key_pair->public, key_pair->modulus);
+
+    if (!oracle(padded, key_pair)) {
+        fprintf(stderr, "Padded test did not work\n");
+        goto cleanup;
+    }
+#else
     const RSA_Keypair *key_pair = generate_rsa_keys(e, 256);
 
     generate_constants(key_pair->modulus);
@@ -369,6 +462,7 @@ int main(void) {
         fprintf(stderr, "Padded test did not work\n");
         goto cleanup;
     }
+#endif
 
     //Get initial S
     //Compute first new range using default range
@@ -383,6 +477,26 @@ int main(void) {
     BIGNUM *s = generate_initial_s(padded, key_pair);
     printf("Initial s value: %s\n", BN_bn2hex(s));
 
+#if 0
+    BN_set_word(s, 22626);
+
+    BIGNUM *output = rsa_encrypt(s, key_pair->public, key_pair->modulus);
+    BN_mod_mul(output, output, padded, key_pair->modulus, ctx);
+
+    if (oracle(output, key_pair)) {
+        BN_free(output);
+        //Value is padded correctly
+        printf("Padded is good\n");
+    } else {
+        printf("Padded is bad\n");
+    }
+
+    exit(1);
+
+    BN_set_word(s, 22626);
+    printf("Corrected s value: %s\n", BN_bn2hex(s));
+#endif
+
     //Create initial range
     struct range *start = checked_malloc(sizeof(struct range));
     start->a = BN_dup(B_2);
@@ -393,6 +507,11 @@ int main(void) {
 
     get_range_from_s(s, key_pair->modulus);
 
+    for (unsigned int i = 0; i < range_count; ++i) {
+        printf("Range element %lu\n", i);
+        printf("%s\n%s\n", BN_bn2dec(range_list[i]->a), BN_bn2dec(range_list[i]->b));
+    }
+
     for (;;) {
         //Range is a single number
         if (range_count == 1 && BN_cmp(range_list[0]->a, range_list[0]->b) == 0) {
@@ -401,12 +520,12 @@ int main(void) {
         }
         BIGNUM *tmp_num;
         if (range_count == 1) {
-            printf("Calling new S\n");
+            printf("Calling new S 2c\n");
             tmp_num = generate_new_s(padded, key_pair, range_list[0], s);
             BN_free(s);
             s = tmp_num;
         } else if (range_count > 1) {
-            printf("Calling NEXT S\n");
+            printf("Calling NEXT S 2b\n");
             tmp_num = generate_next_s(padded, key_pair, s);
             BN_free(s);
             s = tmp_num;
@@ -467,4 +586,5 @@ cleanup:
     BN_free(e);
 
     return EXIT_SUCCESS;
+#endif
 }
